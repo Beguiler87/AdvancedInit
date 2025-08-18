@@ -3,6 +3,26 @@
 # Global Constants.
 UNIQUE_CONDITIONS = ["slain", "dying", "unconscious", "stable"]
 
+# Registry of conditions.
+class ConditionRegistry:
+    CONDITIONS = [
+        "blinded",
+        "charmed",
+        "concentration",
+        "deafened",
+        "frightened",
+        "grappled",
+        "incapacitated",
+        "invisible",
+        "paralyzed",
+        "petrified",
+        "poisoned",
+        "prone",
+        "restrained",
+        "stunned",
+        "unconscious"
+    ]
+
 # Warrior class defines combatants: name, initiative, side, AC, HP, conditions and associated durations.
 class Warrior:
     def __init__(self, name, initiative, side, ac, hp_current, hp_max,hp_current_max=None, conditions=None):
@@ -145,7 +165,7 @@ class Warrior:
 
 # Conditions class defines various combat conditions.
 class Condition:
-    def __init__(self, name, duration=None, tick_timing=None, source=None, target=None, tick_owner=None):
+    def __init__(self, name, duration=None, tick_timing=None, source=None, target=None, tick_owner=None, expires_with_source=None):
         self.name = name
         self.duration = duration
         self.tick_timing = tick_timing
@@ -153,6 +173,7 @@ class Condition:
         self.target = target
         self.tick_owner = tick_owner
         self.expired = False
+        self.expires_with_source = expires_with_source
     # Checks condition duration and decrements it, but never below 0. 0 is the expiration condition and will return True.
     def tick(self):
         if self.duration is None:
@@ -195,9 +216,6 @@ class Condition:
             return True
         # Returns False by default.
         return False
-    def expires_with_source(self):
-
-
 
 
 # Tracker class creates empty list of combatants, allies/enemies, sets current combatant to 0.
