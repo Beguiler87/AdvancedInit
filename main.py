@@ -1,31 +1,32 @@
 # Primary file for Advanced Initiative Tracker.
 
 # Global Constants.
-UNIQUE_CONDITIONS = ["slain", "dying", "unconscious", "stable"]
+UNIQUE_CONDITIONS = ("slain", "dying", "unconscious", "stable", "concentration")
+CONDITIONS = (
+    "blinded",
+    "charmed",
+    "concentration",
+    "deafened",
+    "dying",
+    "frightened",
+    "grappled",
+    "incapacitated",
+    "invisible",
+    "paralyzed",
+    "petrified",
+    "poisoned",
+    "prone",
+    "restrained",
+    "slain",
+    "stable",
+    "stunned",
+    "unconscious"
+)
 
-# Registry of conditions.
-class ConditionRegistry:
-    CONDITIONS = [
-        "blinded",
-        "charmed",
-        "concentration",
-        "deafened",
-        "frightened",
-        "grappled",
-        "incapacitated",
-        "invisible",
-        "paralyzed",
-        "petrified",
-        "poisoned",
-        "prone",
-        "restrained",
-        "stunned",
-        "unconscious"
-    ]
 
 # Warrior class defines combatants: name, initiative, side, AC, HP, conditions and associated durations.
 class Warrior:
-    def __init__(self, name, initiative, side, ac, hp_current, hp_max,hp_current_max=None, conditions=None):
+    def __init__(self, name, initiative, side, ac, hp_current, hp_max,hp_current_max=None, conditions=None, tiebreak_priority=0):
         self.name = name
         self.initiative = initiative
         self.side = side
@@ -37,6 +38,7 @@ class Warrior:
         self.conditions = conditions if conditions is not None else []
         self.death_save_failures = 0
         self.death_save_successes = 0
+        self.tiebreak_priority = tiebreak_priority
     # Handles a combatant taking damage.
     def take_damage(self, amount, is_critical=False):
         # Checks if the target is dead already
@@ -105,8 +107,11 @@ class Warrior:
         # If condition is not a Condition instance, converts
         else:
             new_condition = Condition(condition)
-        new_condition.name = new_condition.name.lower()
+        new_condition.name = new_condition.name
         if new_condition.name in UNIQUE_CONDITIONS and any(c.name == new_condition.name for c in self.conditions):
+            if new_condition.name == "concentration":
+                self.remove_condition("concentration")
+                self.conditions.append(new_condition)
             return
         else:
             self.conditions.append(new_condition)
@@ -114,9 +119,9 @@ class Warrior:
                 self.reset_death_saves()
     # Handles removing conditions from a combatant.
     def remove_condition(self, condition, silent=False):
-        condition_name = condition.lower() if isinstance(condition, str) else condition.name.lower()
+        condition_name = condition if isinstance(condition, str) else condition.name
         for c in self.conditions:
-            if c.name.lower() == condition_name:
+            if c.name == condition_name:
                 self.conditions.remove(c)
                 return
         if not silent:
@@ -166,14 +171,14 @@ class Warrior:
 # Conditions class defines various combat conditions.
 class Condition:
     def __init__(self, name, duration=None, tick_timing=None, source=None, target=None, tick_owner=None, expires_with_source=None):
-        self.name = name
+        self.name = name.lower()
         self.duration = duration
-        self.tick_timing = tick_timing
-        self.source = source
-        self.target = target
-        self.tick_owner = tick_owner
+        self.tick_timing = tick_timing.lower() if tick_timing else None
+        self.source = source.lower() if isinstance(source, str) else source
+        self.target = target.lower() if isinstance(target, str) else target
+        self.tick_owner = tick_owner.lower() if tick_owner else None
         self.expired = False
-        self.expires_with_source = expires_with_source
+        self.expires_with_source = expires_with_source.lower() if expires_with_source else None
     # Checks condition duration and decrements it, but never below 0. 0 is the expiration condition and will return True.
     def tick(self):
         if self.duration is None:
@@ -226,6 +231,24 @@ class Tracker:
         self.enemies = []
         self.current_warrior_index = 0
         self.round_number = 1
+    # Handles moving from turn to turn.
+    def next_turn(self):
+        # Defines current warrior in initiative.
+        current_warrior = self.warriors[self.current_warrior_index]
+        # Loops through current combatant's conditions (if any) and ticks any that decrement at end of turn.
+        current_warrior.tick_conditions("end", current_warrior)
+        # Increments index in list of combatants.
+        self.current_warrior_index += 1
+        # Resets index to 0 if reaching the end of initiative list.
+        if self.current_warrior_index >= len(self.warriors):
+            self.current_warrior_index = 0
+            self.round_number += 1
+        # Defines new current warrior.
+        new_warrior = self.warriors[self.current_warrior_index]
+        # Loops through current combatant's conditions (if any) and ticks any that decrement at start of turn.
+        new_warrior.tick_conditions("start", new_warrior)
+        # Returns the new current combatant in the list.
+        return new_warrior
     # Adds combatants to lists, then sorts by initiative in descending order.
     def add_warrior(self, name, initiative, side, ac, hp_current, hp_max, conditions):
         warrior = Warrior(name, initiative, side, ac, hp_current, hp_max, conditions)
@@ -237,8 +260,29 @@ class Tracker:
         self.sort_warriors()
     # Initiative sorting.
     def sort_warriors(self):
-        self.warriors.sort(key=lambda x: x.initiative, reverse=True)
-    
+        self.warriors.sort(key=lambda x: (-x.initiative, x.tiebreak_priority))
+    # Handles condition removal cascade.
+    def remove_condition(self, warrior, condition_name):
+        # Designates conditions that break concentration.
+        breaks_concentration = ("slain", "dying", "unconscious", "incapacitated", "paralyzed", "petrified", "stunned")
+        # Removes conditions.
+        warrior.remove_condition(condition_name, silent=True)
+        # Cascades concentration effects.
+        if condition_name == "concentration":
+            for other in self.warriors:
+                for cond in list(other.conditions):
+                    if cond.source == warrior and cond.expires_with_source == "concentration" and cond.target == other:
+                        other.remove_condition(cond)
+            return
+        # Cascades effects that break concentration.
+        elif condition_name in breaks_concentration:
+            if any(cond.name == "concentration" for cond in warrior.conditions):
+                self.remove_condition(warrior, "concentration")
+    def get_initiative_ties(self):
+        ties = {}
+        for warrior in self.warriors:
+            ties.setdefault(warrior.initiative, []).append(warrior)
+        return {init: group for init, group in ties.items() if len(group) > 1}
 
 # Primary function
 def main():
