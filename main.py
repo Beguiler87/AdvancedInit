@@ -23,7 +23,6 @@ CONDITIONS = (
     "unconscious"
 )
 
-
 # Warrior class defines combatants: name, initiative, side, AC, HP, conditions and associated durations.
 class Warrior:
     def __init__(self, name, initiative, side, ac, hp_current, hp_max,hp_current_max=None, conditions=None, tiebreak_priority=0):
@@ -222,7 +221,6 @@ class Condition:
         # Returns False by default.
         return False
 
-
 # Tracker class creates empty list of combatants, allies/enemies, sets current combatant to 0.
 class Tracker:
     def __init__(self):
@@ -267,6 +265,11 @@ class Tracker:
         breaks_concentration = ("slain", "dying", "unconscious", "incapacitated", "paralyzed", "petrified", "stunned")
         # Removes conditions.
         warrior.remove_condition(condition_name, silent=True)
+        # Cascades conditions that rely on other conditions.
+        for other in self.warriors:
+            for cond in list(other.conditions):
+                if cond.source == warrior and cond.expires_with_source == condition_name:
+                    other.remove_condition(cond)
         # Cascades concentration effects.
         if condition_name == "concentration":
             for other in self.warriors:
