@@ -1,5 +1,8 @@
 # Primary file for Advanced Initiative Tracker.
 
+# Imports.
+import uuid
+
 # Global Constants.
 UNIQUE_CONDITIONS = ("slain", "dying", "unconscious", "stable", "concentration")
 CONDITIONS = (
@@ -117,14 +120,48 @@ class Warrior:
             if new_condition.name in ("slain", "stable"):
                 self.reset_death_saves()
     # Handles removing conditions from a combatant.
-    def remove_condition(self, condition, silent=False):
-        condition_name = condition if isinstance(condition, str) else condition.name
-        for c in self.conditions:
-            if c.name == condition_name:
+    def remove_condition(self, condition_name=None, condition_id=None, silent=False):
+        removed = 0
+        if isinstance(condition_name, Condition):
+            try:
+                self.conditions.remove(condition)
+                return 1
+            except ValueError:
+                if not silent:
+                    raise ValueError("Error: Condition instance not found on this warrior.")
+                return 0
+        if isinstance(condition, str) and condition_name is None:
+            condition_name = condition
+        if condition_name is not None and condition_id is None:
+            for i, c in enumerate(self.conditions):
+                if c.name == condition_name:
+                    del self.conditions[i]
+                    return 1
+                if not silent:
+                    raise ValueError(f"Error: Condition '{condition_name}' not found on this warrior.")
+                return 0
+        if condition_name is None and condition_id is not None:
+            to_remove = [c for c in self.conditions if getattr(c, "condition_id", None) == condition_id]
+            removed = len(to_remove)
+            for c in to_remove:
                 self.conditions.remove(c)
-                return
+            if removed == 0 and not silent:
+                raise ValueError(f"Error: No conditions with id '{condition_id}' found on this warrior.")
+            return removed
+        if condition_name is not None and condition_id is not None:
+            to_remove = [
+                c for c in self.conditions
+                if c.name == condition_name and getattr(c, "condition_id", None) == condition_id
+            ]
+            removed = len(to_remove)
+            for c in to_remove:
+                self.conditions.remove(c)
+            if removed == 0 and not silent:
+                raise ValueError(f"Error: No conditions named '{condition_name}' with id '{condition_id}' found on this warrior.")
+            return removed
         if not silent:
-            raise ValueError(f"Error: Condition '{condition_name}' not found in log.")
+            raise ValueError("Error: Please provide a condition instance, a name, an ID, or name and ID")
+        return 0
     # Handles the mechanics of failed death saving throws.
     def fail_death_saves(self, is_critical=False):
         if self.hp_current > 0:
@@ -169,7 +206,7 @@ class Warrior:
 
 # Conditions class defines various combat conditions.
 class Condition:
-    def __init__(self, name, duration=None, tick_timing=None, source=None, target=None, tick_owner=None, expires_with_source=None):
+    def __init__(self, name, duration=None, tick_timing=None, source=None, target=None, tick_owner=None, expires_with_source=None, condition_id=None):
         self.name = name.lower()
         self.duration = duration
         self.tick_timing = tick_timing.lower() if tick_timing else None
@@ -178,6 +215,7 @@ class Condition:
         self.tick_owner = tick_owner.lower() if tick_owner else None
         self.expired = False
         self.expires_with_source = expires_with_source.lower() if expires_with_source else None
+        self.condition_id = condition_id or str(uuid.uuid4())
     # Checks condition duration and decrements it, but never below 0. 0 is the expiration condition and will return True.
     def tick(self):
         if self.duration is None:
@@ -203,9 +241,6 @@ class Condition:
         target_name = normalize(self.target)
         source_name = normalize(self.source)
         towner_name = normalize(self.tick_owner)
-        # Fail early if unexpected types are encountered
-        if current_actor is None or target_name is None or source_name is None:
-            return False
         # Forces timing match.
         if self.tick_timing != timing:
             return False
@@ -213,11 +248,15 @@ class Condition:
         if not towner_name:
             return True
         # If the tick owner is the target, tick on target's turn.
-        if towner_name == "target" and current_actor == target_name:
-            return True
+        if towner_name == "target":
+            if target_name is None or current_actor is None:
+                return False
+            return current_actor == target_name
         # If the tick owner is the source, tick on source's turn.
-        if towner_name == "source" and current_actor == source_name:
-            return True
+        if towner_name == "source":
+            if source_name is None or current_actor is None:
+                return False
+            return current_actor == source_name
         # Returns False by default.
         return False
 
