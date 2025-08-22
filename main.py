@@ -53,15 +53,17 @@ class Warrior:
         # If the target is an enemy and reduced to 0 hp or less, marks them as dead
         if self.hp_current <= 0 and self.side == "enemy":
             self.hp_current = 0
-            self.apply_condition("slain")
+            self.apply_condition(Condition("slain"))
             return "slain"
         # Provides conditions for when the target is an ally and reduced to 0 hp or less
         if self.hp_current <= 0 and self.side == "ally":
             # If the target is an ally, checks for massive damage
             if self.hp_current <= -self.hp_current_max:
                 self.hp_current = 0
-                self.apply_condition("slain")
-                self.remove_condition("dying")
+                self.apply_condition(Condition("slain"))
+                dying = self._find_condition_by_name("dying")
+                if dying is not None:
+                    self.remove_condition(dying)
                 return "slain"
             # Provides cases for when the target is an ally and not killed outright
             else:
@@ -72,25 +74,37 @@ class Warrior:
                     failures = 2 if is_critical else 1
                     self.death_save_failures += failures
                     if self.death_save_failures >= 3:
-                        self.apply_condition("slain")
-                        self.remove_condition("dying")
+                        self.apply_condition(Condition("slain"))
+                        dying = self._find_condition_by_name("dying")
+                        if dying is not None:
+                            self.remove_condition(dying)
                         return "slain"
                     return "dying"
                 self.hp_current = 0
                 return "dying"
         return
+    # Helper method for finding conditions by name from string type.
+    def _find_condition_by_name(self, name: str):
+        return next((c for c in self.conditions if getattr(c, "name", "").lower() == name.lower()), None)
     # Handles a combatant receiving healing.
     def heal(self, amount, resurrection_effect=False):
         if self.is_dead():
             if resurrection_effect:
-                self.reset_death_saves()
-                self.remove_condition("slain")
+                slain = self._find_condition_by_name("slain")
+                if slain is not None:
+                    self.remove_condition(slain)
             else:
                 return
         self.reset_death_saves()
-        self.remove_condition("unconscious", silent=True)
-        self.remove_condition("dying", silent=True)
-        self.remove_condition("stable", silent=True)
+        unconscious = self._find_condition_by_name("unconscious")
+        dying = self._find_condition_by_name("dying")
+        stable = self._find_condition_by_name("stable")
+        if unconscious is not None:
+            self.remove_condition(unconscious)
+        if dying is not None:
+            self.remove_condition(dying)
+        if stable is not None:
+            self.remove_condition(stable)
         self.hp_current += amount
         if self.hp_current > self.hp_current_max:
             self.hp_current = self.hp_current_max
@@ -109,59 +123,32 @@ class Warrior:
         # If condition is not a Condition instance, converts
         else:
             new_condition = Condition(condition)
-        new_condition.name = new_condition.name
-        if new_condition.name in UNIQUE_CONDITIONS and any(c.name == new_condition.name for c in self.conditions):
-            if new_condition.name == "concentration":
-                self.remove_condition("concentration")
+        is_unique = new_condition.name in UNIQUE_CONDITIONS
+        has_same = any(c.name == new_condition.name for c in self.conditions)
+        if is_unique and new_condition.name == "concentration":
+            if has_same:
+                return "concentration_exists"
+            else:
                 self.conditions.append(new_condition)
-            return
+                return "added"
+        if is_unique and has_same:
+            return "duplicate_ignored"
         else:
             self.conditions.append(new_condition)
             if new_condition.name in ("slain", "stable"):
                 self.reset_death_saves()
+            return "added"
     # Handles removing conditions from a combatant.
-    def remove_condition(self, condition_name=None, condition_id=None, silent=False):
+    def remove_condition(self, condition):
         removed = 0
-        if isinstance(condition_name, Condition):
-            try:
-                self.conditions.remove(condition)
-                return 1
-            except ValueError:
-                if not silent:
-                    raise ValueError("Error: Condition instance not found on this warrior.")
-                return 0
-        if isinstance(condition, str) and condition_name is None:
-            condition_name = condition
-        if condition_name is not None and condition_id is None:
-            for i, c in enumerate(self.conditions):
-                if c.name == condition_name:
-                    del self.conditions[i]
-                    return 1
-                if not silent:
-                    raise ValueError(f"Error: Condition '{condition_name}' not found on this warrior.")
-                return 0
-        if condition_name is None and condition_id is not None:
-            to_remove = [c for c in self.conditions if getattr(c, "condition_id", None) == condition_id]
-            removed = len(to_remove)
-            for c in to_remove:
-                self.conditions.remove(c)
-            if removed == 0 and not silent:
-                raise ValueError(f"Error: No conditions with id '{condition_id}' found on this warrior.")
-            return removed
-        if condition_name is not None and condition_id is not None:
-            to_remove = [
-                c for c in self.conditions
-                if c.name == condition_name and getattr(c, "condition_id", None) == condition_id
-            ]
-            removed = len(to_remove)
-            for c in to_remove:
-                self.conditions.remove(c)
-            if removed == 0 and not silent:
-                raise ValueError(f"Error: No conditions named '{condition_name}' with id '{condition_id}' found on this warrior.")
-            return removed
-        if not silent:
-            raise ValueError("Error: Please provide a condition instance, a name, an ID, or name and ID")
-        return 0
+        if not isinstance(condition, Condition):
+            raise TypeError(f"Error: {condition} is not a Condition instance.")
+        elif condition not in self.conditions:
+            raise ValueError(f"Error: {condition} not found on target combatant.")
+        else:
+            self.conditions.remove(condition)
+            removed = 1
+        return removed
     # Handles the mechanics of failed death saving throws.
     def fail_death_saves(self, is_critical=False):
         if self.hp_current > 0:
@@ -179,18 +166,24 @@ class Warrior:
             return
         if self.is_dead():
             return "slain"
+        slain = self._find_condition_by_name("slain")
+        unconscious = self._find_condition_by_name("unconscious")
+        dying = self._find_condition_by_name("dying")
         self.death_save_successes += 1
         if is_critical:
-            self.remove_condition("slain", silent=True)
-            self.remove_condition("unconscious", silent=True)
-            self.remove_condition("dying", silent=True)
+            if slain is not None:
+                self.remove_condition(slain)
+            if unconscious is not None:
+                self.remove_condition(unconscious)
+            if dying is not None:
+                self.remove_condition(dying)
             self.hp_current = 1
             self.reset_death_saves()
             return
         if self.death_save_successes == 3:
-            self.remove_condition("dying")
-            self.apply_condition("stable")
-            self.reset_death_saves()
+            if dying is not None:
+                self.remove_condition(dying)
+            self.apply_condition(Condition("stable"))
     # Resets counts associated with death saving throws when necessary.
     def reset_death_saves(self):
         self.death_save_successes = 0
@@ -208,11 +201,20 @@ class Warrior:
 class Condition:
     def __init__(self, name, duration=None, tick_timing=None, source=None, target=None, tick_owner=None, expires_with_source=None, condition_id=None):
         self.name = name.lower()
-        self.duration = duration
+        if duration is None:
+            self.duration = duration
+        elif isinstance(duration, bool):
+            raise TypeError("Error: Duration must be None or a whole number greater than 0.")
+        elif isinstance(duration, int) and duration >= 0:
+            self.duration = duration
+        else:
+            raise TypeError("Error: Duration must be None or a whole number greater than 0.")
         self.tick_timing = tick_timing.lower() if tick_timing else None
+        assert self.tick_timing in (None, "start", "end"), (f"Error: Invalid tick_timing: {self.tick_timing}")
         self.source = source.lower() if isinstance(source, str) else source
         self.target = target.lower() if isinstance(target, str) else target
         self.tick_owner = tick_owner.lower() if tick_owner else None
+        assert self.tick_owner in (None, "source", "target"), (f"Error: Invalid tick_owner: {self.tick_owner}")
         self.expired = False
         self.expires_with_source = expires_with_source.lower() if expires_with_source else None
         self.condition_id = condition_id or str(uuid.uuid4())
