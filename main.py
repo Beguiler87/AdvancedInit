@@ -28,12 +28,11 @@ CONDITIONS = (
 
 # Warrior class defines combatants: name, initiative, side, AC, HP, conditions and associated durations.
 class Warrior:
-    def __init__(self, name, initiative, side, ac, hp_current, hp_max,hp_current_max=None, conditions=None, tiebreak_priority=0):
+    def __init__(self, name, initiative, side, ac, hp_current, hp_max, hp_current_max=None, conditions=None, tiebreak_priority=0):
         self.name = name
         self.initiative = initiative
         self.side = side
         self.ac = ac
-        self.hp_current = hp_current
         self.hp_max = hp_max
         self.hp_current_max = hp_current_max if hp_current_max is not None else hp_max
         self.hp_current = min(hp_current, self.hp_current_max)
@@ -41,6 +40,30 @@ class Warrior:
         self.death_save_failures = 0
         self.death_save_successes = 0
         self.tiebreak_priority = tiebreak_priority
+    # Handles a combatant's maximum hp receiving a temporary buff and any associated healing effect.
+    def buff_max_hp(self, x, healing=False):
+        if x <= 0:
+            raise ValueError(f"Error: {x} must be greater than 0.")
+        if self.is_dead():
+            return
+        self.hp_current_max += x
+        if healing:
+            self.heal(x)
+        self.hp_current = min(self.hp_current, self.hp_current_max)
+    # Handles a combatant's maximum hp receiving a debuff and potential side effects.
+    def debuff_max_hp(self, x):
+        if x <= 0:
+            raise ValueError(f"Error: {x} must be greater than 0.")
+        if self.is_dead():
+            return
+        self.hp_current_max = max(self.hp_current_max - x, 0)
+        if self.hp_current_max <= 0:
+            self.hp_current = 0
+            self.hp_current_max = 0
+            self.apply_condition(Condition("slain"))
+            return
+        self.take_damage(x)
+        self.hp_current = min(self.hp_current, self.hp_current_max)
     # Handles a combatant taking damage.
     def take_damage(self, amount, is_critical=False):
         # Checks if the target is dead already
@@ -157,8 +180,10 @@ class Warrior:
             return "slain"
         self.death_save_failures += 2 if is_critical else 1
         if self.death_save_failures >= 3:
-            self.remove_condition("dying")
-            self.apply_condition("slain")
+            dying = self._find_condition_by_name("dying")
+            if dying:
+                self.remove_condition(dying)
+            self.apply_condition(Condition("slain"))
             return "slain"
     # Handles the mechanics of successful death saving throws.
     def succeed_death_saves(self, is_critical=False):
