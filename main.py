@@ -36,10 +36,14 @@ class Warrior:
         self.hp_max = hp_max
         self.hp_current_max = hp_current_max if hp_current_max is not None else hp_max
         self.hp_current = min(hp_current, self.hp_current_max)
-        self.conditions = conditions if conditions is not None else []
+        self.conditions = []
+        self._cond_index = {}
         self.death_save_failures = 0
         self.death_save_successes = 0
         self.tiebreak_priority = tiebreak_priority
+        if conditions:
+            for cond in conditions:
+                self.apply_condition(cond)
     # Handles a combatant's maximum hp receiving a temporary buff and any associated healing effect.
     def buff_max_hp(self, x, healing=False):
         if x <= 0:
@@ -140,38 +144,27 @@ class Warrior:
         return any(c.name.lower() == "unconscious" for c in self.conditions)
     # Handles applying conditions to a combatant.
     def apply_condition(self, condition):
-        # Checks if the condition is a Condition instance or not
-        if isinstance(condition, Condition):
-            new_condition = condition
-        # If condition is not a Condition instance, converts
-        else:
-            new_condition = Condition(condition)
-        is_unique = new_condition.name in UNIQUE_CONDITIONS
-        has_same = any(c.name == new_condition.name for c in self.conditions)
-        if is_unique and new_condition.name == "concentration":
-            if has_same:
-                return "concentration_exists"
-            else:
-                self.conditions.append(new_condition)
-                return "added"
-        if is_unique and has_same:
-            return "duplicate_ignored"
-        else:
-            self.conditions.append(new_condition)
-            if new_condition.name in ("slain", "stable"):
-                self.reset_death_saves()
-            return "added"
+        if condition.name in UNIQUE_CONDITIONS and any(c.name == condition.name for c in self.conditions):
+            return False
+        self.conditions.append(condition)
+        self._cond_index[condition.condition_id] = condition
+        return True
     # Handles removing conditions from a combatant.
     def remove_condition(self, condition):
-        removed = 0
-        if not isinstance(condition, Condition):
-            raise TypeError(f"Error: {condition} is not a Condition instance.")
-        elif condition not in self.conditions:
-            raise ValueError(f"Error: {condition} not found on target combatant.")
-        else:
-            self.conditions.remove(condition)
-            removed = 1
-        return removed
+        if condition not in self.conditions:
+            return 0
+        self.conditions.remove(condition)
+        self._cond_index.pop(condition.condition_id, None)
+        return 1
+    # Handles retrieving condition id.
+    def get_condition_by_id(self, condition_id):
+        return self._cond_index.get(condition_id)
+    # Debug helper to ensure list and dict are consistent.
+    def assert_index_integrity(self):
+        assert len(self.conditions) == len(self._cond_index)
+        for cond in self.conditions:
+            assert cond.condition_id in self._cond_index
+            assert self._cond_index[cond.condition_id] is cond
     # Handles the mechanics of failed death saving throws.
     def fail_death_saves(self, is_critical=False):
         if self.hp_current > 0:
@@ -295,8 +288,13 @@ class Tracker:
         self.enemies = []
         self.current_warrior_index = 0
         self.round_number = 1
+        # Used for determining when added warriors can act, in case of mid-combat adds (summonings, animation of corpses, etc.)
+        self.eligible_from_round = {}
     # Handles moving from turn to turn.
     def next_turn(self):
+        # Safely handles cases where next turn is called on an empty list of combatants.
+        if len(self.warriors) == 0:
+            return None
         # Defines current warrior in initiative.
         current_warrior = self.warriors[self.current_warrior_index]
         # Loops through current combatant's conditions (if any) and ticks any that decrement at end of turn.
@@ -313,40 +311,62 @@ class Tracker:
         new_warrior.tick_conditions("start", new_warrior)
         # Returns the new current combatant in the list.
         return new_warrior
-    # Adds combatants to lists, then sorts by initiative in descending order.
+    # Adds combatants to lists, determining what round they can first act in if they are added in the midst of combat.
     def add_warrior(self, name, initiative, side, ac, hp_current, hp_max, conditions):
+        current_ref = None
         warrior = Warrior(name, initiative, side, ac, hp_current, hp_max, conditions)
-        self.warriors.append(warrior)
-        if warrior.side == "enemy":
-            self.enemies.append(warrior.name)
+        if len(self.warriors) == 0:
+            self.warriors.append(warrior)
+            self.sort_warriors()
+            if warrior.side == "enemy":
+                self.enemies.append(warrior.name)
+            else:
+                self.allies.append(warrior.name)
+            self.eligible_from_round[id(warrior)] = self.round_number
         else:
-            self.allies.append(warrior.name)
-        self.sort_warriors()
+            current_ref = self.warriors[self.current_warrior_index]
+            self.warriors.append(warrior)
+            if warrior.side == "enemy":
+                self.enemies.append(warrior.name)
+            else:
+                self.allies.append(warrior.name)
+            self.sort_warriors()
+            if current_ref == None:
+                self.current_warrior_index = 0
+            else:
+                self.current_warrior_index = self.warriors.index(current_ref)
+                new_index = self.warriors.index(warrior)
+                if new_index > self.current_warrior_index:
+                    self.eligible_from_round[id(warrior)] = self.round_number
+                else:
+                    self.eligible_from_round[id(warrior)] = self.round_number + 1
     # Initiative sorting.
     def sort_warriors(self):
         self.warriors.sort(key=lambda x: (-x.initiative, x.tiebreak_priority))
     # Handles condition removal cascade.
-    def remove_condition(self, warrior, condition_name):
-        # Designates conditions that break concentration.
-        breaks_concentration = ("slain", "dying", "unconscious", "incapacitated", "paralyzed", "petrified", "stunned")
+    def remove_condition(self, warrior, condition_id):
+        # Establishes specific instance of condition and returns an error if that instance is not found.
+        c_instance = warrior.get_condition_by_id(condition_id)
+        if c_instance is None:
+            return {"removed":0, "primary_id": condition_id, "cascaded":[], "reason":"not_found"}
         # Removes conditions.
-        warrior.remove_condition(condition_name, silent=True)
-        # Cascades conditions that rely on other conditions.
-        for other in self.warriors:
-            for cond in list(other.conditions):
-                if cond.source == warrior and cond.expires_with_source == condition_name:
-                    other.remove_condition(cond)
-        # Cascades concentration effects.
-        if condition_name == "concentration":
-            for other in self.warriors:
-                for cond in list(other.conditions):
-                    if cond.source == warrior and cond.expires_with_source == "concentration" and cond.target == other:
-                        other.remove_condition(cond)
-            return
-        # Cascades effects that break concentration.
-        elif condition_name in breaks_concentration:
-            if any(cond.name == "concentration" for cond in warrior.conditions):
-                self.remove_condition(warrior, "concentration")
+        removed = warrior.remove_condition(c_instance)
+        if removed == 0:
+            return {"removed":0, "primary_id": condition_id, "cascaded":[], "reason":"not_found"}
+        anchor = "concentration" if c_instance.name == "concentration" else c_instance.name
+        temp_list = []
+        for w in self.warriors:
+            for cond in list(w.conditions):
+                if cond.source is warrior and cond.expires_with_source == anchor:
+                    c = (w, cond)
+                    temp_list.append(c)
+        cascaded_list = []
+        for w, cond in temp_list:
+            removed = w.remove_condition(cond)
+            if removed:
+                cascaded_list.append(cond.condition_id)
+        return {"removed": 1, "primary_id": condition_id, "cascaded": cascaded_list}
+    # Handles initiative ties, allowing the user to manually sort tied combatants in the gui.
     def get_initiative_ties(self):
         ties = {}
         for warrior in self.warriors:
