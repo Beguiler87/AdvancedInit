@@ -5,28 +5,11 @@ import uuid
 
 # Global Constants.
 UNIQUE_CONDITIONS = ("slain", "dying", "unconscious", "stable", "concentration")
-CONDITIONS = (
-    "blinded",
-    "charmed",
-    "concentration",
-    "deafened",
-    "dying",
-    "frightened",
-    "grappled",
-    "incapacitated",
-    "invisible",
-    "paralyzed",
-    "petrified",
-    "poisoned",
-    "prone",
-    "restrained",
-    "slain",
-    "stable",
-    "stunned",
-    "unconscious"
-)
+CONDITIONS = ("blinded", "charmed", "concentration", "deafened", "dying", "frightened", "grappled", "incapacitated", "invisible", "paralyzed", "petrified", "poisoned", "prone", "restrained", "slain", "stable", "stunned", "unconscious")
+DISABLING_CONDITIONS = ("slain", "dying", "unconscious", "stable")
+BREAKS_CONCENTRATION = ("slain", "unconscious", "dying", "stable", "incapacitated", "paralyzed", "stunned", "petrified")
 
-# Warrior class defines combatants: name, initiative, side, AC, HP, conditions and associated durations.
+# Warrior class defines combatants: name, initiative, side, AC, HP, conditions, and associated durations.
 class Warrior:
     def __init__(self, name, initiative, side, ac, hp_current, hp_max, hp_current_max=None, conditions=None, tiebreak_priority=0):
         self.name = name
@@ -63,8 +46,16 @@ class Warrior:
         self.hp_current_max = max(self.hp_current_max - x, 0)
         if self.hp_current_max <= 0:
             self.hp_current = 0
-            self.hp_current_max = 0
             self.apply_condition(Condition("slain"))
+            dying = self._find_condition_by_name("dying")
+            unconscious = self._find_condition_by_name("unconscious")
+            stable = self._find_condition_by_name("stable")
+            if dying is not None:
+                self.remove_condition(dying)
+            if unconscious is not None:
+                self.remove_condition(unconscious)
+            if stable is not None:
+                self.remove_condition(stable)
             return
         self.take_damage(x)
         self.hp_current = min(self.hp_current, self.hp_current_max)
@@ -88,7 +79,7 @@ class Warrior:
             if self.hp_current <= -self.hp_current_max:
                 self.hp_current = 0
                 self.apply_condition(Condition("slain"))
-                dying = self._find_condition_by_name("dying")
+                dying = self._find_condition_by_name(Condition("dying"))
                 if dying is not None:
                     self.remove_condition(dying)
                 return "slain"
@@ -142,13 +133,31 @@ class Warrior:
     # Helper function for checking unconscious status.
     def is_unconscious(self):
         return any(c.name.lower() == "unconscious" for c in self.conditions)
-    # Handles applying conditions to a combatant.
+    # Handles applying conditions to a combatant. Returns a token indicating what took place.
     def apply_condition(self, condition):
-        if condition.name in UNIQUE_CONDITIONS and any(c.name == condition.name for c in self.conditions):
-            return False
+        name = condition.name
+        if name not in CONDITIONS:
+            raise ValueError(f"Error: Invalid condition name: {name}")
+        is_unique = (name in UNIQUE_CONDITIONS)
+        has_same = any(c.name == name for c in self.conditions)
+        reset_flag = False
+        token = "added"
+        if name == "concentration" and has_same:
+            return "concentration_replace_requested"
+        elif is_unique and has_same:
+            return "duplicate_ignored"
+        elif name == "slain" or name == "stable":
+            reset_flag = True
+            token = "added_breaks_concentration"
+        elif name in BREAKS_CONCENTRATION:
+            token = "added_breaks_concentration"
+        else:
+            token = "added"
         self.conditions.append(condition)
         self._cond_index[condition.condition_id] = condition
-        return True
+        if reset_flag:
+            self.reset_death_saves()
+        return token
     # Handles removing conditions from a combatant.
     def remove_condition(self, condition):
         if condition not in self.conditions:
@@ -161,6 +170,7 @@ class Warrior:
         return self._cond_index.get(condition_id)
     # Debug helper to ensure list and dict are consistent.
     def assert_index_integrity(self):
+        assert len(self._cond_index) == len(set(self._cond_index.keys()))
         assert len(self.conditions) == len(self._cond_index)
         for cond in self.conditions:
             assert cond.condition_id in self._cond_index
@@ -295,22 +305,48 @@ class Tracker:
         # Safely handles cases where next turn is called on an empty list of combatants.
         if len(self.warriors) == 0:
             return None
+        # Future proofing.
+        self.current_warrior_index %= len(self.warriors)
         # Defines current warrior in initiative.
         current_warrior = self.warriors[self.current_warrior_index]
         # Loops through current combatant's conditions (if any) and ticks any that decrement at end of turn.
         current_warrior.tick_conditions("end", current_warrior)
         # Increments index in list of combatants.
         self.current_warrior_index += 1
-        # Resets index to 0 if reaching the end of initiative list.
+        # Resets index to 0 and advances round number if reaching the end of initiative list.
         if self.current_warrior_index >= len(self.warriors):
             self.current_warrior_index = 0
             self.round_number += 1
+        # Handles indexing for combatants inserted into an active combat.
+        next_index = self.current_warrior_index
+        i = 0
+        while i < len(self.warriors):
+            candidate = self.warriors[next_index]
+            eligible_from = self.eligible_from_round.get(id(candidate), 1)
+            if eligible_from <= self.round_number:
+                break
+            else:
+                next_index += 1
+                if next_index == len(self.warriors):
+                    next_index = 0
+                    self.round_number += 1
+            i += 1
+        self.current_warrior_index = next_index
         # Defines new current warrior.
         new_warrior = self.warriors[self.current_warrior_index]
         # Loops through current combatant's conditions (if any) and ticks any that decrement at start of turn.
         new_warrior.tick_conditions("start", new_warrior)
+        self.check_team_able()
         # Returns the new current combatant in the list.
         return new_warrior
+    # Checks for disabled combatants.
+    def _is_disabled(self, warrior):
+        return any(c.name in DISABLING_CONDITIONS for c in warrior.conditions)
+    # Checks for disabled sides.
+    def check_team_able(self):
+        allies_disabled = len(self.allies) > 0 and all(self._is_disabled(w) for w in self.allies)
+        enemies_disabled = len(self.enemies) > 0 and all(self._is_disabled(w) for w in self.enemies)
+        return {"allies_disabled": allies_disabled, "enemies_disabled": enemies_disabled}
     # Adds combatants to lists, determining what round they can first act in if they are added in the midst of combat.
     def add_warrior(self, name, initiative, side, ac, hp_current, hp_max, conditions):
         current_ref = None
@@ -318,28 +354,26 @@ class Tracker:
         if len(self.warriors) == 0:
             self.warriors.append(warrior)
             self.sort_warriors()
+            self.current_warrior_index = 0
             if warrior.side == "enemy":
-                self.enemies.append(warrior.name)
+                self.enemies.append(warrior)
             else:
-                self.allies.append(warrior.name)
+                self.allies.append(warrior)
             self.eligible_from_round[id(warrior)] = self.round_number
         else:
             current_ref = self.warriors[self.current_warrior_index]
             self.warriors.append(warrior)
             if warrior.side == "enemy":
-                self.enemies.append(warrior.name)
+                self.enemies.append(warrior)
             else:
-                self.allies.append(warrior.name)
+                self.allies.append(warrior)
             self.sort_warriors()
-            if current_ref == None:
-                self.current_warrior_index = 0
+            self.current_warrior_index = self.warriors.index(current_ref)
+            new_index = self.warriors.index(warrior)
+            if new_index > self.current_warrior_index:
+                self.eligible_from_round[id(warrior)] = self.round_number
             else:
-                self.current_warrior_index = self.warriors.index(current_ref)
-                new_index = self.warriors.index(warrior)
-                if new_index > self.current_warrior_index:
-                    self.eligible_from_round[id(warrior)] = self.round_number
-                else:
-                    self.eligible_from_round[id(warrior)] = self.round_number + 1
+                self.eligible_from_round[id(warrior)] = self.round_number + 1
     # Initiative sorting.
     def sort_warriors(self):
         self.warriors.sort(key=lambda x: (-x.initiative, x.tiebreak_priority))
@@ -365,6 +399,7 @@ class Tracker:
             removed = w.remove_condition(cond)
             if removed:
                 cascaded_list.append(cond.condition_id)
+        self.check_team_able()
         return {"removed": 1, "primary_id": condition_id, "cascaded": cascaded_list}
     # Handles initiative ties, allowing the user to manually sort tied combatants in the gui.
     def get_initiative_ties(self):
@@ -373,6 +408,10 @@ class Tracker:
             ties.setdefault(warrior.initiative, []).append(warrior)
         return {init: group for init, group in ties.items() if len(group) > 1}
 
+# Window class used for creating a functional GUI.
+class Window:
+    def __init__(self):
+        
 # Primary function
 def main():
     tracker = Tracker()
