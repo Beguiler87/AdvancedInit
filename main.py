@@ -2,10 +2,13 @@
 
 # Imports.
 import uuid
+import tkinter as tk
+from tkinter import ttk, messagebox, simpledialog, font
 
 # Global Constants.
 UNIQUE_CONDITIONS = ("slain", "dying", "unconscious", "stable", "concentration")
 CONDITIONS = ("blinded", "charmed", "concentration", "deafened", "dying", "frightened", "grappled", "incapacitated", "invisible", "paralyzed", "petrified", "poisoned", "prone", "restrained", "slain", "stable", "stunned", "unconscious")
+# Conditions that render a creature unable to act, more or less permanently with regards to combat. Used for detecting team wipes.
 DISABLING_CONDITIONS = ("slain", "dying", "unconscious", "stable")
 BREAKS_CONCENTRATION = ("slain", "unconscious", "dying", "stable", "incapacitated", "paralyzed", "stunned", "petrified")
 
@@ -79,14 +82,14 @@ class Warrior:
             if self.hp_current <= -self.hp_current_max:
                 self.hp_current = 0
                 self.apply_condition(Condition("slain"))
-                dying = self._find_condition_by_name(Condition("dying"))
+                dying = self._find_condition_by_name("dying")
                 if dying is not None:
                     self.remove_condition(dying)
                 return "slain"
             # Provides cases for when the target is an ally and not killed outright
             else:
                 # If the ally is dropped to 0 hp, they are marked as dying
-                self.apply_condition("dying")
+                self.apply_condition(Condition("dying"))
                 # If the ally was already at 0, begins accruing death save failures
                 if was_at_zero:
                     failures = 2 if is_critical else 1
@@ -239,8 +242,10 @@ class Condition:
             raise TypeError("Error: Duration must be None or a whole number greater than 0.")
         self.tick_timing = tick_timing.lower() if tick_timing else None
         assert self.tick_timing in (None, "start", "end"), (f"Error: Invalid tick_timing: {self.tick_timing}")
-        self.source = source.lower() if isinstance(source, str) else source
-        self.target = target.lower() if isinstance(target, str) else target
+        self.source = source
+        assert (self.source is None or hasattr(self.source, "name")), (f"Error: Invalid source: {self.source}")
+        self.target = target
+        assert (self.target is None or hasattr(self.target, "name")), (f"Error: Invalid target: {self.target}")
         self.tick_owner = tick_owner.lower() if tick_owner else None
         assert self.tick_owner in (None, "source", "target"), (f"Error: Invalid tick_owner: {self.tick_owner}")
         self.expired = False
@@ -271,6 +276,8 @@ class Condition:
         target_name = normalize(self.target)
         source_name = normalize(self.source)
         towner_name = normalize(self.tick_owner)
+        # Normalizes timing case as safety net.
+        timing = timing.lower() if isinstance(timing, str) else timing
         # Forces timing match.
         if self.tick_timing != timing:
             return False
@@ -410,8 +417,50 @@ class Tracker:
 
 # Window class used for creating a functional GUI.
 class Window:
-    def __init__(self):
+    # Defines the window and inputs.
+    def __init__(self, tracker, title="Combat Tracker", open_add_modal_on_start=True, cons_catalog=CONDITIONS, breaks_conc=BREAKS_CONCENTRATION, disab_conditions=DISABLING_CONDITIONS, hotkeys=None):
+        # parent widget creating an instance of Tk
+        if not isinstance(tracker, Tracker):
+            raise TypeError("Error: no Tracker instance present.")
+        self.tracker = tracker
+        self.open_add_modal_on_start = open_add_modal_on_start
+        self.cons_catalog = cons_catalog
+        self.breaks_conc = breaks_conc
+        self.disab_conditions = disab_conditions
+        self.hotkeys = hotkeys
+        # Builds the tkinter root.
+        self.root = tk.Tk()
+        # Pulls the title into the gui display.
+        self.root.title(title)
+        # Calculates user's screen size.
+        screenw_full = self.root.winfo_screenwidth()
+        screenh_full = self.root.winfo_screenheight()
+        # Calculates small offset to prevent overflow in screen.
+        screenw = int(screenw_full * .90)
+        screenh = int(screenh_full * .90)
+        # Screen centering equations.
+        x = int((screenw_full - screenw) // 2)
+        y = int((screenh_full - screenh) // 2)
+        # Generates full screen size, defaulting to 16:9 aspect ratio.
+        full_screen = f"{screenw}x{screenh}+{x}+{y}"
+        self.root.geometry(full_screen)
+        # Establishes minimum screen size for smaller displays.
+        self.root.minsize(1120, 630)
+        # Note: screen size is, by default, manually adjustable by the user.
         
+    # Defines rows, columns, and weights.
+    def _build_layout():
+        
+    # Adds UI elements inside frames.
+    def _build_widgets():
+
+    # Wires buttons to handler methods and installs hotkeys.
+    def _bind_events():
+
+    # Refreshes UI, shows the Add Combatant modal if open_add_modal_on_start=True.
+    def _initial_render():
+
+
 # Primary function
 def main():
     tracker = Tracker()
