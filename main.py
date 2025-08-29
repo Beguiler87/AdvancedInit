@@ -447,23 +447,89 @@ class Window:
         # Establishes minimum screen size for smaller displays.
         self.root.minsize(1120, 630)
         # Note: screen size is, by default, manually adjustable by the user.
-        
-    # Defines rows, columns, and weights.
-    def _build_layout():
-        
-    # Adds UI elements inside frames.
-    def _build_widgets():
-
-    # Wires buttons to handler methods and installs hotkeys.
-    def _bind_events():
-
-    # Refreshes UI, shows the Add Combatant modal if open_add_modal_on_start=True.
-    def _initial_render():
+        # Configuring columns and rows within screen, defining the grid.
+        self.root.grid_columnconfigure(0, weight=2, uniform="cols")
+        self.root.grid_columnconfigure(1, weight=3, uniform="cols")
+        self.root.grid_columnconfigure(2, weight=2, uniform="cols")
+        self.root.grid_rowconfigure(0, weight=3, uniform="rows")
+        self.root.grid_rowconfigure(1, weight=1, uniform="rows")
+        # Configures frames that fit into the grid, providing appearance of a border.
+        self.left_frame_border = tk.Frame(self.root, bg="black")
+        self.left_frame_border.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        self.center_frame_border = tk.Frame(self.root, bg="black")
+        self.center_frame_border.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
+        self.right_frame_border = tk.Frame(self.root, bg="black")
+        self.right_frame_border.grid(row=0, column=2, sticky="nsew", padx=2, pady=2)
+        self.log_frame_border = tk.Frame(self.root, bg="black")
+        self.log_frame_border.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=2, pady=2)
+        self.left_frame_border.grid_columnconfigure(0, weight=1)
+        self.left_frame_border.grid_rowconfigure(0, weight=1)
+        self.center_frame_border.grid_columnconfigure(0, weight=1)
+        self.center_frame_border.grid_rowconfigure(0, weight=1)
+        self.right_frame_border.grid_columnconfigure(0, weight=1)
+        self.right_frame_border.grid_rowconfigure(0, weight=1)
+        self.log_frame_border.grid_columnconfigure(0, weight=1)
+        self.log_frame_border.grid_rowconfigure(0, weight=1)
+        # Configures panels that fit into the previously established borders.
+        self.left_frame = tk.Frame(self.left_frame_border, bg="NavajoWhite3")
+        self.center_frame = tk.Frame(self.center_frame_border, bg="NavajoWhite3")
+        self.right_frame = tk.Frame(self.right_frame_border, bg="NavajoWhite3")
+        self.log_frame = tk.Frame(self.log_frame_border, bg="NavajoWhite3")
+        # Snaps the panel section frames into the grid.
+        self.left_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.center_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.right_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.log_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        # Left panel frame configuration.
+        self.left_frame.grid_columnconfigure(0, weight=1)
+        self.left_frame.grid_rowconfigure(0, weight=0)
+        self.left_frame.grid_rowconfigure(1, weight=1)
+        # Child frame for round counter and next turn buttons.
+        self.left_header = tk.Frame(self.left_frame, bg="black")
+        self.left_header.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self.left_header.grid_columnconfigure(0, weight=1)
+        self.left_header.grid_columnconfigure(1, weight=0)
+        self.left_header.grid_rowconfigure(0, weight=1)
+        # Round counter.
+        self.round_counter = tk.Frame(self.left_header, bg="NavajoWhite4")
+        self.round_counter.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        # Current round display.
+        self.round_var = tk.StringVar(value=f"Round: {self.tracker.round_number}")
+        self.round_label = ttk.Label(self.round_counter, textvariable=self.round_var)
+        self.round_label.grid(row=0, column=0, sticky="w")
+        # Frame for next turn button.
+        self.next_turn = tk.Frame(self.left_header, bg="black")
+        self.next_turn.grid(row=0, column=1, sticky="nsew", padx=1, pady=1)
+        # Next Turn button configuration.
+        self.nxt_turn_btn = ttk.Button(self.next_turn, text="Next Turn", command=self.tracker.next_turn())
+        self.nxt_turn_btn.grid(row=0, column=0, sticky="e", padx=1, pady=1)
+        # Child frame for initiative order lists.
+        self.left_list_container = tk.Frame(self.left_frame, bg="black")
+        self.left_list_container.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
+        self.left_list_container.grid_columnconfigure(0, weight=1) # Initiative list.
+        self.left_list_container.grid_columnconfigure(1, weight=0) # Scrollbar.
+        self.left_list_container.grid_rowconfigure(0, weight=1)
+        # Initiative order list configuration.
+        self.init_tree = ttk.Treeview(self.left_list_container, columns=("Name", "Init"), show="headings", selectmode="browse")
+        self.init_tree.heading("Name", text="Name")
+        self.init_tree.heading("Init", text="Init")
+        self.init_tree.column("Name", width=200, anchor="w", stretch=True)
+        self.init_tree.column("Init", width=60, anchor="e", stretch=False)
+        # Creates the initiative scrollbar.
+        self.init_scrollbar = ttk.Scrollbar(self.left_list_container, orient="vertical", command=self.init_tree.yview)
+        # Hooks the scrollbar to the initiative order list.
+        self.init_tree.configure(yscrollcommand=self.init_scrollbar.set)
+        # Snaps the initiative list and scrollbar into the correct part of the gui.
+        self.init_tree.grid(row=0, column=0, sticky="nsew")
+        self.init_scrollbar.grid(row=0, column=1, sticky="ns")
 
 
 # Primary function
-def main():
-    tracker = Tracker()
+#def main():
+    #tracker = Tracker()
 
 if __name__ == "__main__":
-    main()
+    tracker = Tracker()
+    window = Window(tracker)
+    window.root.mainloop()
+    #main()
