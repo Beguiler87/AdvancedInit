@@ -20,7 +20,7 @@ Let's be honest, you probably already know enough to do this without me telling 
 Starting the Program:
 
 Program Use Guidelines:
-When entering combatants into the initiative tracker, make sure each name is distinct. If you have multiple entries that are otherwise identical, try to separate them with numbers (ie Goblin 1, Goblin 2, Goblin 3, etc.). More unique names are easier to handle, but numbers will be sufficient.
+When entering combatants into the initiative tracker, make sure each name is distinct. If you have multiple entries that are otherwise identical, try to separate them with numbers (ie Goblin 1, Goblin 2, Goblin 3, etc.). More unique names (Goblin with sword, Goblin with bow, Goblin with spear, Bob the Goblin, etc.) are easier to handle, but numbers will be sufficient.
 
 Ties:
 When entering combatants, don't worry about ties. The system will provide pop ups to allow you to manually sort combatants who have identical initiative.
