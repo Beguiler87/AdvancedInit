@@ -428,6 +428,19 @@ class Window:
         self.breaks_conc = breaks_conc
         self.disab_conditions = disab_conditions
         self.hotkeys = hotkeys
+        self._suppress_select = False
+        self._iid_to_warrior = {}
+        self.selected_warrior = None
+        self.colors = {
+            "panel_bg": "lemonchiffon3",
+            "list_bg": "ivory2",
+            "highlight": "turquoise3",
+            "slain": "gray60",
+            "border": "black",
+            "button_bg": "NavajoWhite4",
+            "label_bg": "NavajoWhite4"
+        }
+        self.tags = {"current": "current_actor", "slain": "slain"}
         # Builds the tkinter root.
         self.root = tk.Tk()
         # Pulls the title into the gui display.
@@ -453,17 +466,15 @@ class Window:
         self.root.grid_columnconfigure(2, weight=2, uniform="cols")
         self.root.grid_rowconfigure(0, weight=3, uniform="rows")
         self.root.grid_rowconfigure(1, weight=1, uniform="rows")
+        # Sets up the panel frames in the gui.
+        self._setup_left_frame()
         # Configures frames that fit into the grid, providing appearance of a border.
-        self.left_frame_border = tk.Frame(self.root, bg="black")
-        self.left_frame_border.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
-        self.center_frame_border = tk.Frame(self.root, bg="black")
+        self.center_frame_border = tk.Frame(self.root, bg=self.colors["border"])
         self.center_frame_border.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
-        self.right_frame_border = tk.Frame(self.root, bg="black")
+        self.right_frame_border = tk.Frame(self.root, bg=self.colors["border"])
         self.right_frame_border.grid(row=0, column=2, sticky="nsew", padx=2, pady=2)
-        self.log_frame_border = tk.Frame(self.root, bg="black")
+        self.log_frame_border = tk.Frame(self.root, bg=self.colors["border"])
         self.log_frame_border.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=2, pady=2)
-        self.left_frame_border.grid_columnconfigure(0, weight=1)
-        self.left_frame_border.grid_rowconfigure(0, weight=1)
         self.center_frame_border.grid_columnconfigure(0, weight=1)
         self.center_frame_border.grid_rowconfigure(0, weight=1)
         self.right_frame_border.grid_columnconfigure(0, weight=1)
@@ -471,46 +482,57 @@ class Window:
         self.log_frame_border.grid_columnconfigure(0, weight=1)
         self.log_frame_border.grid_rowconfigure(0, weight=1)
         # Configures panels that fit into the previously established borders.
-        self.left_frame = tk.Frame(self.left_frame_border, bg="NavajoWhite3")
-        self.center_frame = tk.Frame(self.center_frame_border, bg="NavajoWhite3")
-        self.right_frame = tk.Frame(self.right_frame_border, bg="NavajoWhite3")
-        self.log_frame = tk.Frame(self.log_frame_border, bg="NavajoWhite3")
+        self.center_frame = tk.Frame(self.center_frame_border, bg=self.colors["panel_bg"])
+        self.right_frame = tk.Frame(self.right_frame_border, bg=self.colors["panel_bg"])
+        self.log_frame = tk.Frame(self.log_frame_border, bg=self.colors["panel_bg"])
         # Snaps the panel section frames into the grid.
-        self.left_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.center_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.right_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.log_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+    # Defines left panel and contents.
+    def _setup_left_frame(self):
+        # Establishes 'borders' for frame.
+        self.left_frame_border = tk.Frame(self.root, bg=self.colors["border"])
+        self.left_frame_border.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        self.left_frame_border.grid_columnconfigure(0, weight=1)
+        self.left_frame_border.grid_rowconfigure(0, weight=1)
+        self.left_frame = tk.Frame(self.left_frame_border, bg=self.colors["panel_bg"])
+        self.left_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         # Left panel frame configuration.
         self.left_frame.grid_columnconfigure(0, weight=1)
         self.left_frame.grid_rowconfigure(0, weight=0)
         self.left_frame.grid_rowconfigure(1, weight=1)
         # Child frame for round counter and next turn buttons.
-        self.left_header = tk.Frame(self.left_frame, bg="black")
+        self.left_header = tk.Frame(self.left_frame, bg=self.colors["border"])
         self.left_header.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         self.left_header.grid_columnconfigure(0, weight=1)
         self.left_header.grid_columnconfigure(1, weight=0)
         self.left_header.grid_rowconfigure(0, weight=1)
         # Round counter.
-        self.round_counter = tk.Frame(self.left_header, bg="NavajoWhite4")
+        self.round_counter = tk.Frame(self.left_header, bg=self.colors["button_bg"])
         self.round_counter.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         # Current round display.
         self.round_var = tk.StringVar(value=f"Round: {self.tracker.round_number}")
-        self.round_label = ttk.Label(self.round_counter, textvariable=self.round_var)
+        self.round_label = tk.Label(self.round_counter, textvariable=self.round_var, font=("TkDefaultFont", 14, "bold"), bg=self.colors["label_bg"])
         self.round_label.grid(row=0, column=0, sticky="w")
         # Frame for next turn button.
-        self.next_turn = tk.Frame(self.left_header, bg="black")
+        self.next_turn = tk.Frame(self.left_header, bg=self.colors["border"])
         self.next_turn.grid(row=0, column=1, sticky="nsew", padx=1, pady=1)
         # Next Turn button configuration.
-        self.nxt_turn_btn = ttk.Button(self.next_turn, text="Next Turn", command=self.tracker.next_turn())
+        self.nxt_turn_btn = ttk.Button(self.next_turn, text="Next Turn", command=self._on_next_turn)
         self.nxt_turn_btn.grid(row=0, column=0, sticky="e", padx=1, pady=1)
         # Child frame for initiative order lists.
-        self.left_list_container = tk.Frame(self.left_frame, bg="black")
+        self.left_list_container = tk.Frame(self.left_frame, bg=self.colors["border"])
         self.left_list_container.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
         self.left_list_container.grid_columnconfigure(0, weight=1) # Initiative list.
         self.left_list_container.grid_columnconfigure(1, weight=0) # Scrollbar.
         self.left_list_container.grid_rowconfigure(0, weight=1)
         # Initiative order list configuration.
         self.init_tree = ttk.Treeview(self.left_list_container, columns=("Name", "Init"), show="headings", selectmode="browse")
+        style = ttk.Style(self.root)
+        style.configure("Treeview", background=self.colors["list_bg"], fieldbackground=self.colors["list_bg"])
+        self.init_tree.tag_configure(self.tags["current"], background=self.colors["highlight"])
+        self.init_tree.tag_configure(self.tags["slain"], background=self.colors["slain"])
         self.init_tree.heading("Name", text="Name")
         self.init_tree.heading("Init", text="Init")
         self.init_tree.column("Name", width=200, anchor="w", stretch=True)
@@ -522,9 +544,70 @@ class Window:
         # Snaps the initiative list and scrollbar into the correct part of the gui.
         self.init_tree.grid(row=0, column=0, sticky="nsew")
         self.init_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.init_tree.bind("<<TreeviewSelect>>", self._on_initiative_select)
+    # Used to refresh the initiative display.
+    def render_initiative(self):
+        if len(self.tracker.warriors) == 0:
+            self._clear_initiative_list()
+            return
+        self._clear_initiative_list()
+        for i, w in enumerate(self.tracker.warriors):
+            tags = []
+            if w.is_dead():
+                tags.append(self.tags["slain"])
+            if i == self.tracker.current_warrior_index:
+                tags.append(self.tags["current"])
+            values = (w.name, w.initiative)
+            iid = str(id(w))
+            self.init_tree.insert("", "end", iid=iid, values=values, tags=tags)
+            self._iid_to_warrior[iid] = w
+        current = self.tracker.warriors[self.tracker.current_warrior_index]
+        current_iid = str(id(current))
+        self._suppress_select = True
+        self.init_tree.selection_set(current_iid)
+        self.init_tree.focus(current_iid)
+        self.init_tree.see(current_iid)
+        self._suppress_select = False
+        if len(self.tracker.warriors) >= 2:
+            self.nxt_turn_btn.state(["!disabled"])
+        else:
+            self.nxt_turn_btn.state(["disabled"])
+    # Helper method to clear initiative list between refreshes.
+    def _clear_initiative_list(self):
+        self.init_tree.delete(*self.init_tree.get_children())
+        self._iid_to_warrior = {}
+    # Retrieves current warrior identification.
+    def _on_initiative_select(self):
+        if self._suppress_select:
+            return
+        iid_tuple = self.init_tree.selection()
+        if len(iid_tuple) == 0:
+            return
+        w_iid = iid_tuple[0]
+        w = self._iid_to_warrior.get(w_iid)
+        if w is None:
+            return
+        self.selected_warrior = w
+    # Ties tracker.next_turn() and render_initiative() together.
+    def _on_next_turn(self):
+        # Guards against advancing turn if only one warrior on the list.
+        if len(self.tracker.warriors) < 2:
+            return
+        # Advances the tracker by calling next_turn() and exiting safely if the roster is empty.
+        new_actor = self.tracker.next_turn()
+        if new_actor is None:
+            return
+        # Syncs gui by advancing round number if appropriate, updating selected warrior, and updates the highlight.
+        self.round_var.set(f"Round: {self.tracker.round_number}")
+        self.selected_warrior = new_actor
+        self.render_initiative()
+        # Checks for team wipe and notifies if true.
+        status = self.tracker.check_team_able()
+        if status["allies_disabled"]: messagebox.showinfo("Combat", "All allies are defeated. The DM has earned a nap and a cookie!")
+        if status["enemies_disabled"]: messagebox.showinfo("Combat", "All enemies are defeated. The party have earned waffles. Waffles, Ho!")
+    
 
-
-# Primary function
+# Primary function/entry point.
 #def main():
     #tracker = Tracker()
 
