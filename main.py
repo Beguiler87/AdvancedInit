@@ -443,6 +443,7 @@ class Window:
         self.tags = {"current": "current_actor", "slain": "slain"}
         # Builds the tkinter root.
         self.root = tk.Tk()
+        self.root.withdraw() # Hides the first iteration of the gui window for better sizing operation.
         # Pulls the title into the gui display.
         self.root.title(title)
         # Calculates user's screen size.
@@ -468,28 +469,10 @@ class Window:
         self.root.grid_rowconfigure(1, weight=1, uniform="rows")
         # Sets up the panel frames in the gui.
         self._setup_left_frame()
-        # Configures frames that fit into the grid, providing appearance of a border.
-        self.center_frame_border = tk.Frame(self.root, bg=self.colors["border"])
-        self.center_frame_border.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
-        self.right_frame_border = tk.Frame(self.root, bg=self.colors["border"])
-        self.right_frame_border.grid(row=0, column=2, sticky="nsew", padx=2, pady=2)
-        self.log_frame_border = tk.Frame(self.root, bg=self.colors["border"])
-        self.log_frame_border.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=2, pady=2)
-        self.center_frame_border.grid_columnconfigure(0, weight=1)
-        self.center_frame_border.grid_rowconfigure(0, weight=1)
-        self.right_frame_border.grid_columnconfigure(0, weight=1)
-        self.right_frame_border.grid_rowconfigure(0, weight=1)
-        self.log_frame_border.grid_columnconfigure(0, weight=1)
-        self.log_frame_border.grid_rowconfigure(0, weight=1)
-        # Configures panels that fit into the previously established borders.
-        self.center_frame = tk.Frame(self.center_frame_border, bg=self.colors["panel_bg"])
-        self.right_frame = tk.Frame(self.right_frame_border, bg=self.colors["panel_bg"])
-        self.log_frame = tk.Frame(self.log_frame_border, bg=self.colors["panel_bg"])
-        # Snaps the panel section frames into the grid.
-        self.center_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
-        self.right_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
-        self.log_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
-    # Defines left panel and contents.
+        self._setup_central_frame()
+        self._setup_right_frame()
+        self._setup_log_frame()
+    # Defines panels and contents.
     def _setup_left_frame(self):
         # Establishes 'borders' for frame.
         self.left_frame_border = tk.Frame(self.root, bg=self.colors["border"])
@@ -545,6 +528,30 @@ class Window:
         self.init_tree.grid(row=0, column=0, sticky="nsew")
         self.init_scrollbar.grid(row=0, column=1, sticky="ns")
         self.init_tree.bind("<<TreeviewSelect>>", self._on_initiative_select)
+    def _setup_central_frame(self):
+        # Central panel frame configuration.
+        self.center_frame_border = tk.Frame(self.root, bg=self.colors["border"])
+        self.center_frame_border.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
+        self.center_frame_border.grid_columnconfigure(0, weight=1)
+        self.center_frame_border.grid_rowconfigure(0, weight=1)
+        self.center_frame = tk.Frame(self.center_frame_border, bg=self.colors["panel_bg"])
+        self.center_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+    def _setup_right_frame(self):
+        # Right panel frame configuration.
+        self.right_frame_border = tk.Frame(self.root, bg=self.colors["border"])
+        self.right_frame_border.grid(row=0, column=2, sticky="nsew", padx=2, pady=2)
+        self.right_frame_border.grid_columnconfigure(0, weight=1)
+        self.right_frame_border.grid_rowconfigure(0, weight=1)
+        self.right_frame = tk.Frame(self.right_frame_border, bg=self.colors["panel_bg"])
+        self.right_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+    def _setup_log_frame(self):
+        # Log panel frame configuration.
+        self.log_frame_border = tk.Frame(self.root, bg=self.colors["border"])
+        self.log_frame_border.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=2, pady=2)
+        self.log_frame_border.grid_columnconfigure(0, weight=1)
+        self.log_frame_border.grid_rowconfigure(0, weight=1)
+        self.log_frame = tk.Frame(self.log_frame_border, bg=self.colors["panel_bg"])
+        self.log_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
     # Used to refresh the initiative display.
     def render_initiative(self):
         if len(self.tracker.warriors) == 0:
@@ -605,7 +612,6 @@ class Window:
         status = self.tracker.check_team_able()
         if status["allies_disabled"]: messagebox.showinfo("Combat", "All allies are defeated. The DM has earned a nap and a cookie!")
         if status["enemies_disabled"]: messagebox.showinfo("Combat", "All enemies are defeated. The party have earned waffles. Waffles, Ho!")
-    
 
 # Primary function/entry point.
 #def main():
