@@ -441,6 +441,7 @@ class Window:
             "label_bg": "NavajoWhite4"
         }
         self.tags = {"current": "current_actor", "slain": "slain"}
+        self._roster_iid_to_warrior = {}
         # Builds the tkinter root.
         self.root = tk.Tk()
         self.root.withdraw() # Hides the first iteration of the gui window for better sizing operation.
@@ -450,20 +451,30 @@ class Window:
         screenw_full = self.root.winfo_screenwidth()
         screenh_full = self.root.winfo_screenheight()
         # Calculates small offset to prevent overflow in screen.
-        screenw = int(screenw_full * .90)
-        screenh = int(screenh_full * .90)
+        tw = int(screenw_full * .90)
+        th = int(screenh_full * .90)
+        # Clamps aspect ratio.
+        if tw / th > 16/9:
+            tw = int(th * 16/9)
+        else:
+            th = int(tw * 9/16)
+        screenw = tw
+        screenh = th
         # Screen centering equations.
         x = int((screenw_full - screenw) // 2)
         y = int((screenh_full - screenh) // 2)
         # Generates full screen size, defaulting to 16:9 aspect ratio.
         full_screen = f"{screenw}x{screenh}+{x}+{y}"
         self.root.geometry(full_screen)
+        self.root.update_idletasks()
+        self.root.deiconify()
+        self.root.after_idle(self.root.geometry, full_screen)
         # Establishes minimum screen size for smaller displays.
         self.root.minsize(1120, 630)
         # Note: screen size is, by default, manually adjustable by the user.
         # Configuring columns and rows within screen, defining the grid.
         self.root.grid_columnconfigure(0, weight=2, uniform="cols")
-        self.root.grid_columnconfigure(1, weight=3, uniform="cols")
+        self.root.grid_columnconfigure(1, weight=4, uniform="cols")
         self.root.grid_columnconfigure(2, weight=2, uniform="cols")
         self.root.grid_rowconfigure(0, weight=3, uniform="rows")
         self.root.grid_rowconfigure(1, weight=1, uniform="rows")
@@ -536,6 +547,50 @@ class Window:
         self.center_frame_border.grid_rowconfigure(0, weight=1)
         self.center_frame = tk.Frame(self.center_frame_border, bg=self.colors["panel_bg"])
         self.center_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.center_frame.grid_columnconfigure(0, weight=1)
+        self.center_frame.grid_rowconfigure(0, weight=1)
+        # Child frame for central panel.
+        self.central_header = tk.Frame(self.center_frame, bg=self.colors["border"])
+        self.central_header.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        self.central_header.grid_columnconfigure(0, weight=1)
+        self.central_header.grid_columnconfigure(1, weight=0)
+        self.central_header.grid_rowconfigure(0, weight=1)
+        # Child frame for central list.
+        self.central_list = tk.Frame(self.central_header, bg=self.colors["list_bg"])
+        self.central_list.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.central_list.grid_columnconfigure(0, weight=1)
+        self.central_list.grid_columnconfigure(1, weight=0)
+        self.central_list.grid_rowconfigure(0, weight=1)
+        self.central_list.grid_rowconfigure(1, weight=0)
+        # Creates roster treeview.
+        self.roster = ttk.Treeview(self.central_list, columns=("Name", "AC", "HP", "Max HP", "Conditions", "Fail", "Pass"), show="headings", selectmode="browse")
+        self.roster.heading("Name", text="Name")
+        self.roster.heading("AC", text="AC")
+        self.roster.heading("HP", text="HP")
+        self.roster.heading("Max HP", text="Max HP")
+        self.roster.heading("Conditions", text="Conditions")
+        self.roster.heading("Fail", text="Fail")
+        self.roster.heading("Pass", text="Pass")
+        style = ttk.Style(self.root)
+        style.configure("Treeview", background=self.colors["list_bg"], fieldbackground=self.colors["list_bg"])
+        self.roster.column("Name", width=200, anchor="w", stretch=True)
+        self.roster.column("AC", width=45, anchor="w", stretch=False)
+        self.roster.column("HP", width=70, anchor="w", stretch=False)
+        self.roster.column("Max HP", width=70, anchor="w", stretch=False)
+        self.roster.column("Conditions", width=20, anchor="w", stretch=True)
+        self.roster.column("Fail", width=40, anchor="w", stretch=False)
+        self.roster.column("Pass", width=40, anchor="w", stretch=False)
+        # Creates the roster scrollbars.
+        self.roster_vert = ttk.Scrollbar(self.central_list, orient="vertical", command=self.roster.yview)
+        self.roster_horiz = ttk.Scrollbar(self.central_list, orient="horizontal", command=self.roster.xview)
+        # Hooks the scrollbars to the roster list.
+        self.roster.configure(yscrollcommand=self.roster_vert.set)
+        self.roster.configure(xscrollcommand=self.roster_horiz.set)
+        # Snaps the roster list and scrollbars into the correct part of the gui.
+        self.roster.grid(row=0, column=0, sticky="nsew")
+        self.roster_vert.grid(row=0, column=1, sticky="ns")
+        self.roster_horiz.grid(row=1, column=0, sticky="ew")
+        self.roster.bind("<<TreeviewSelect>>", self._on_roster_select)
     def _setup_right_frame(self):
         # Right panel frame configuration.
         self.right_frame_border = tk.Frame(self.root, bg=self.colors["border"])
@@ -544,6 +599,8 @@ class Window:
         self.right_frame_border.grid_rowconfigure(0, weight=1)
         self.right_frame = tk.Frame(self.right_frame_border, bg=self.colors["panel_bg"])
         self.right_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.right_frame.grid_columnconfigure(0, weight=1)
+        self.right_frame.grid_rowconfigure(0, weight=1)
     def _setup_log_frame(self):
         # Log panel frame configuration.
         self.log_frame_border = tk.Frame(self.root, bg=self.colors["border"])
@@ -552,6 +609,8 @@ class Window:
         self.log_frame_border.grid_rowconfigure(0, weight=1)
         self.log_frame = tk.Frame(self.log_frame_border, bg=self.colors["panel_bg"])
         self.log_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.log_frame.grid_columnconfigure(0, weight=1)
+        self.log_frame.grid_rowconfigure(0, weight=1)
     # Used to refresh the initiative display.
     def render_initiative(self):
         if len(self.tracker.warriors) == 0:
@@ -579,6 +638,7 @@ class Window:
             self.nxt_turn_btn.state(["!disabled"])
         else:
             self.nxt_turn_btn.state(["disabled"])
+        self.render_roster()
     # Helper method to clear initiative list between refreshes.
     def _clear_initiative_list(self):
         self.init_tree.delete(*self.init_tree.get_children())
@@ -595,6 +655,18 @@ class Window:
         if w is None:
             return
         self.selected_warrior = w
+        self.render_roster()
+    # Handler for scrollbar binding in central panel.
+    def _on_roster_select(self):
+        if self._suppress_select:
+            return
+        selection = self.roster.selection()
+        if not selection:
+            return
+        iid = selection()[0]
+        w = self._roster_iid_to_warrior.get(iid)
+        if w is not None:
+            self.selected_warrior = w
     # Ties tracker.next_turn() and render_initiative() together.
     def _on_next_turn(self):
         # Guards against advancing turn if only one warrior on the list.
@@ -608,10 +680,33 @@ class Window:
         self.round_var.set(f"Round: {self.tracker.round_number}")
         self.selected_warrior = new_actor
         self.render_initiative()
+        self.render_roster()
         # Checks for team wipe and notifies if true.
         status = self.tracker.check_team_able()
         if status["allies_disabled"]: messagebox.showinfo("Combat", "All allies are defeated. The DM has earned a nap and a cookie!")
         if status["enemies_disabled"]: messagebox.showinfo("Combat", "All enemies are defeated. The party have earned waffles. Waffles, Ho!")
+    # Renders roster.
+    def render_roster(self):
+        self.roster.delete(*self.roster.get_children())
+        self._roster_iid_to_warrior = {}
+        for w in self.tracker.warriors:
+            iid = str(id(w))
+            self._roster_iid_to_warrior[iid] = w
+            values = (w.name, w.ac, w.hp_current, w.hp_current_max, ", ".join(c.name for c in w.conditions), w.death_save_failures, w.death_save_successes)
+            tags = []
+            if w.is_dead():
+                tags.append(self.tags["slain"])
+            if w is self.tracker.warriors[self.tracker.current_warrior_index]:
+                tags.append(self.tags["current"])
+            self.roster.insert("", "end", iid=iid, values=values, tags=tags)
+        if self.selected_warrior is not None:
+            sel_iid = str(id(self.selected_warrior))
+            if sel_iid in self._roster_iid_to_warrior:
+                self._suppress_select = True
+                self.roster.selection_set(sel_iid)
+                self.roster.focus(sel_iid)
+                self.roster.see(sel_iid)
+                self._suppress_select = False
 
 # Primary function/entry point.
 #def main():
