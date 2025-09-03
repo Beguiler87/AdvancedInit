@@ -381,6 +381,7 @@ class Tracker:
                 self.eligible_from_round[id(warrior)] = self.round_number
             else:
                 self.eligible_from_round[id(warrior)] = self.round_number + 1
+        return warrior
     # Initiative sorting.
     def sort_warriors(self):
         self.warriors.sort(key=lambda x: (-x.initiative, x.tiebreak_priority))
@@ -600,7 +601,20 @@ class Window:
         self.right_frame = tk.Frame(self.right_frame_border, bg=self.colors["panel_bg"])
         self.right_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.right_frame.grid_columnconfigure(0, weight=1)
-        self.right_frame.grid_rowconfigure(0, weight=1)
+        self.right_frame.grid_rowconfigure(0, weight=0)
+        self.right_frame.grid_rowconfigure(1, weight=0)
+        self.right_frame.grid_rowconfigure(2, weight=1)
+        # Sets up 'Add Combatant' button.
+        self.add_combatant = tk.Frame(self.right_frame, bg=self.colors["border"])
+        self.add_combatant.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self.add_combatant.grid_columnconfigure(0, weight=1)
+        self.add_combatant_frame = tk.Frame(self.add_combatant, bg=self.colors["button_bg"])
+        self.add_combatant_frame.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self.add_combatant_frame.grid_columnconfigure(0, weight=1)
+        # 'Add Combatant' button configuration.
+        self.add_combat_btn = ttk.Button(self.add_combatant_frame, text="Add Combatant", command=self._open_add_warrior_modal)
+        self.add_combat_btn.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self.render_right_panel()
     def _setup_log_frame(self):
         # Log panel frame configuration.
         self.log_frame_border = tk.Frame(self.root, bg=self.colors["border"])
@@ -663,10 +677,11 @@ class Window:
         selection = self.roster.selection()
         if not selection:
             return
-        iid = selection()[0]
+        iid = selection[0]
         w = self._roster_iid_to_warrior.get(iid)
         if w is not None:
             self.selected_warrior = w
+            self.render_right_panel()
     # Ties tracker.next_turn() and render_initiative() together.
     def _on_next_turn(self):
         # Guards against advancing turn if only one warrior on the list.
@@ -707,7 +722,169 @@ class Window:
                 self.roster.focus(sel_iid)
                 self.roster.see(sel_iid)
                 self._suppress_select = False
-
+    # Opens the 'Add Warrior' modal on call.
+    def _open_add_warrior_modal(self):
+        # Defines the modal window.
+        self._aw_win = tk.Toplevel(self.root)
+        self._aw_container = tk.Frame(self._aw_win, bg=self.colors["border"])
+        self._aw_container.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self._aw_contain_field = tk.Frame(self._aw_container, bg=self.colors["panel_bg"])
+        self._aw_contain_field.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self._aw_contain_field.grid_columnconfigure(0, weight=0)
+        self._aw_contain_field.grid_columnconfigure(1, weight=1)
+        # Defines the rows in the modal window for data input.
+        self.name_lbl = tk.Label(self._aw_contain_field, text="Name:", bg=self.colors["label_bg"])
+        self.name_lbl.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+        self._aw_name = ttk.Entry(self._aw_contain_field)
+        self._aw_name.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
+        self._aw_name.focus_set()
+        self.side_lbl = tk.Label(self._aw_contain_field, text="Side:", bg=self.colors["label_bg"])
+        self.side_lbl.grid(row=1, column=0, sticky="ew", padx=2, pady=2)
+        self.side_combo = ttk.Combobox(self._aw_contain_field, state="readonly", values=["Ally", "Enemy"])
+        self.side_combo.grid(row=1, column=1, sticky="ew", padx=2, pady=2)
+        self.ac_lbl = tk.Label(self._aw_contain_field, text="AC:", bg=self.colors["label_bg"])
+        self.ac_lbl.grid(row=2, column=0, sticky="ew", padx=2, pady=2)
+        self._aw_ac = ttk.Entry(self._aw_contain_field, justify="center")
+        self._aw_ac.grid(row=2, column=1, sticky="ew", padx=2, pady=2)
+        self.chp_lbl = tk.Label(self._aw_contain_field, text="Current HP:", bg=self.colors["label_bg"])
+        self.chp_lbl.grid(row=3, column=0, sticky="ew", padx=2, pady=2)
+        self._aw_chp = ttk.Entry(self._aw_contain_field, justify="center")
+        self._aw_chp.grid(row=3, column=1, sticky="ew", padx=2, pady=2)
+        self.mhp_lbl = tk.Label(self._aw_contain_field, text="Max HP:", bg=self.colors["label_bg"])
+        self.mhp_lbl.grid(row=4, column=0, sticky="ew", padx=2, pady=2)
+        self._aw_mhp = ttk.Entry(self._aw_contain_field, justify="center")
+        self._aw_mhp.grid(row=4, column=1, sticky="ew", padx=2, pady=2)
+        self.init_lbl = tk.Label(self._aw_contain_field, text="Initiative:", bg=self.colors["label_bg"])
+        self.init_lbl.grid(row=5, column=0, sticky="ew", padx=2, pady=2)
+        self._aw_init = ttk.Entry(self._aw_contain_field, justify="center")
+        self._aw_init.grid(row=5, column=1, sticky="ew", padx=2, pady=2)
+        self.tbrk_lbl = tk.Label(self._aw_contain_field, text="Tiebreak:", bg=self.colors["label_bg"])
+        self.tbrk_lbl.grid(row=6, column=0, sticky="ew", padx=2, pady=2)
+        self._aw_tbrk = ttk.Entry(self._aw_contain_field, justify="center")
+        self._aw_tbrk.grid(row=6, column=1, sticky="ew", padx=2, pady=2)
+        self._aw_tbrk.insert(0, "0")
+        # Creates frame for add/cancel buttons.
+        self.add_frame = tk.Frame(self._aw_contain_field, bg=self.colors["border"])
+        self.add_frame.grid(row=7, column=0, columnspan=2, sticky="nsew", padx=1, pady=1)
+        self.cadd_frame = tk.Frame(self.add_frame, bg=self.colors["button_bg"])
+        self.cadd_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.cadd_frame.grid_columnconfigure(0, weight=1)
+        self.cadd_frame.grid_columnconfigure(1, weight=1)
+        # Configures add/cancel buttons.
+        self.add_btn = ttk.Button(self.cadd_frame, text="Add Combatant", command=self._confirm_add_warrior)
+        self.add_btn.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self.canc_btn = ttk.Button(self.cadd_frame, text="Cancel", command=self.close_modal)
+        self.canc_btn.grid(row=0, column=1, sticky="ew", padx=1, pady=1)
+    # Method to close modal.
+    def close_modal(self):
+        self._aw_win.destroy()
+    # Confirms a warrior being added.
+    def _confirm_add_warrior(self):
+        name = self._aw_name.get().strip()
+        if not name:
+            messagebox.showerror("Add Combatant", "Name is required.")
+            self._aw_name.focus_set()
+            return
+        if any(w.name == name for w in self.tracker.warriors):
+            if not messagebox.askyesno("Duplicate name", "Name already used. Continue?"):
+                self._aw_name.focus_set()
+                return
+        side = self.side_combo.get()
+        if side not in ("Ally", "Enemy"):
+            messagebox.showerror("Add Combatant", "Side is required.")
+            self.side_combo.focus_set()
+            return
+        try:
+            ac = int(self._aw_ac.get().strip())
+        except ValueError:
+                messagebox.showerror("Add Combatant", "AC is not valid.")
+                self._aw_ac.focus_set()
+                return
+        if ac < 0:
+            messagebox.showerror("Add Combatant", "AC is not valid.")
+            self._aw_ac.focus_set()
+            return
+        try:
+            hp_max = int(self._aw_mhp.get().strip())
+        except ValueError:
+            messagebox.showerror("Add Combatant", "Max HP must be at least 0.")
+            self._aw_mhp.focus_set()
+            return
+        if hp_max <0:
+            messagebox.showerror("Add Combatant", "Max HP must be at least 0.")
+            self._aw_mhp.focus_set()
+            return
+        try:
+            hp_cur = int(self._aw_chp.get().strip())
+        except ValueError:
+            messagebox.showerror("Add Combatant", "Current HP must be at least 0.")
+            self._aw_chp.focus_set()
+            return
+        hp_cur = max(0, min(hp_cur, hp_max))
+        try:
+            initiative = int(self._aw_init.get().strip())
+        except ValueError:
+            messagebox.showerror("Add Combatant", "Initiative must be entered.")
+            self._aw_init.focus_set()
+            return
+        t_text = self._aw_tbrk.get().strip()
+        if t_text == "":
+            tiebreak = 0
+        else:
+            try:
+                tiebreak = int(t_text)
+            except ValueError:
+                messagebox.showerror("Add Combatant", "Tiebreak must be a whole number, but may default to 0.")
+                self._aw_tbrk.focus_set()
+                return
+        payload = {
+            "name": name,
+            "side": side.lower(),
+            "ac": ac,
+            "hp_cur": hp_cur,
+            "hp_max": hp_max,
+            "initiative": initiative,
+            "tiebreak": tiebreak,
+        }
+        self._finalize_add_warrior(payload)
+    # Finalizes the warrior being added.
+    def _finalize_add_warrior(self, payload):
+        # Create the new Warrior
+        w = self.tracker.add_warrior(
+            payload["name"],
+            payload["initiative"],
+            payload["side"],
+            payload["ac"],
+            payload["hp_cur"],
+            payload["hp_max"],
+            conditions=None
+        )
+        # Add to tracker
+        self.tracker.add_warrior(w)
+        # Remember last side for convenience in the modal
+        self._last_side = payload["side"]
+        # Close modal
+        self._aw_win.destroy()
+        # Refresh displays
+        self.render_initiative()
+        self.render_roster()
+        self.render_right_panel()
+        # Select and reveal the new combatant
+        iid = str(id(w))
+        self._suppress_select = True
+        if iid in self._iid_to_warrior:  # initiative list
+            self.init_tree.selection_set(iid)
+            self.init_tree.focus(iid)
+            self.init_tree.see(iid)
+        if iid in self._roster_iid_to_warrior:  # roster list
+            self.roster.selection_set(iid)
+            self.roster.focus(iid)
+            self.roster.see(iid)
+        self._suppress_select = False
+    # Renders the right panel.
+    def render_right_panel(self):
+        # Placeholder until right-panel controls are finished.
+        pass
 # Primary function/entry point.
 #def main():
     #tracker = Tracker()
