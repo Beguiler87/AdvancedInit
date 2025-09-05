@@ -605,15 +605,18 @@ class Window:
         self.right_frame.grid_columnconfigure(0, weight=1)
         self.right_frame.grid_rowconfigure(0, weight=0)
         self.right_frame.grid_rowconfigure(1, weight=0)
-        self.right_frame.grid_rowconfigure(2, weight=1)
-        self.right_frame.grid_rowconfigure(3, weight=1)
+        self.right_frame.grid_rowconfigure(2, weight=0)
+        self.right_frame.grid_rowconfigure(4, weight=0)
+        self.right_frame.grid_rowconfigure(3, weight=0)
         # Sets up 'Add Combatant' button.
         self.add_combatant = tk.Frame(self.right_frame, bg=self.colors["border"])
         self.add_combatant.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         self.add_combatant.grid_columnconfigure(0, weight=1)
+        self.add_combatant.grid_rowconfigure(0, weight=1)
         self.add_combatant_frame = tk.Frame(self.add_combatant, bg=self.colors["button_bg"])
         self.add_combatant_frame.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         self.add_combatant_frame.grid_columnconfigure(0, weight=1)
+        self.add_combatant_frame.grid_rowconfigure(0, weight=1)
         # 'Add Combatant' button configuration.
         self.add_combat_btn = ttk.Button(self.add_combatant_frame, text="Add Combatant", command=self._open_add_warrior_modal)
         self.add_combat_btn.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
@@ -621,12 +624,73 @@ class Window:
         self.strt_frame = tk.Frame(self.right_frame, bg=self.colors["border"])
         self.strt_frame.grid(row=1, column=0, sticky="ew", padx=1, pady=1)
         self.strt_frame.grid_columnconfigure(0, weight=1)
+        self.strt_frame.grid_rowconfigure(0, weight=1)
         self.strt_btn_frame = tk.Frame(self.strt_frame, bg=self.colors["button_bg"])
         self.strt_btn_frame.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         self.strt_btn_frame.grid_columnconfigure(0, weight=1)
+        self.strt_btn_frame.grid_rowconfigure(0, weight=1)
         # 'Start Combat' button configuration
         self.start_combat_btn = ttk.Button(self.strt_btn_frame, text="Start Combat", command=self._on_start_combat)
         self.start_combat_btn.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        # Sets up HP management frame above the 'Damage' and 'Heal' buttons.
+        self.hp_mng_border = tk.Frame(self.right_frame, bg=self.colors["border"])
+        self.hp_mng_border.grid(row=2, column=0, sticky="ew", padx=1, pady=1)
+        self.hp_mng_border.grid_columnconfigure(0, weight=1)
+        self.hp_mng_border.grid_rowconfigure(0, weight=1)
+        self.hp_mng = tk.Frame(self.hp_mng_border, bg=self.colors["list_bg"])
+        self.hp_mng.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.hp_mng.grid_columnconfigure(0, weight=3, uniform="r2")
+        self.hp_mng.grid_columnconfigure(1, weight=1, uniform="r2", minsize = 100)
+        self.hp_mng.grid_columnconfigure(2, weight=1, uniform="r2")
+        self.hp_mng.grid_columnconfigure(3, weight=0, uniform="r2", minsize=120)
+        self.hp_mng.grid_rowconfigure(0, weight=1)
+        self.hp_mng.grid_rowconfigure(1, weight=0)
+        self.hp_mng.grid_rowconfigure(2, weight=1, minsize = 24)
+        self.hp_mng.grid_rowconfigure(3, weight=0)
+        # HP management widgets.
+        self.targeter_border = tk.Frame(self.hp_mng, bg=self.colors["border"])
+        self.targeter_border.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.targeter_border.grid_columnconfigure(0, weight=1)
+        self.targeter_border.grid_rowconfigure(0, weight=1)
+        self.targeter = tk.Frame(self.targeter_border, bg=self.colors["button_bg"])
+        self.targeter.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.amnt_border = tk.Frame(self.hp_mng, bg=self.colors["border"])
+        self.amnt_border.grid(row=0, column=1, sticky="nsew", padx=1, pady=1)
+        self.amnt_border.grid_columnconfigure(0, weight=1)
+        self.amnt_border.grid_rowconfigure(0, weight=1)
+        self.amnt_entry = tk.Frame(self.amnt_border, bg=self.colors["button_bg"])
+        self.amnt_entry.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.res_border = tk.Frame(self.hp_mng, bg=self.colors["border"])
+        self.res_border.grid(row=0, column=2, sticky="nsew", padx=1, pady=1)
+        self.res_border.grid_columnconfigure(0, weight=1)
+        self.res_border.grid_rowconfigure(0, weight=1)
+        self.res_toggle = tk.Frame(self.res_border, bg=self.colors["button_bg"])
+        self.res_toggle.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.valid_border = tk.Frame(self.hp_mng, bg=self.colors["border"])
+        self.valid_border.grid(row=0, column=3, sticky="ew", padx=1, pady=1)
+        self.valid_border.grid_columnconfigure(0, weight=1)
+        self.valid_border.grid_rowconfigure(0, weight=1)
+        self.valid_inline = tk.Frame(self.valid_border, bg=self.colors["button_bg"])
+        self.valid_inline.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.fail_btn = ttk.Button(self.hp_mng, text="Fail", command=self.warrior.fail_death_saves(is_critical=False))
+        self.fail_btn.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
+        self.crit_fail_btn = ttk.Button(self.hp_mng, text="2 Fails", command=self.warrior.fail_death_saves(is_critical=True))
+        self.crit_fail_btn.grid(row=1, column=1, sticky="nsew", padx=1, pady=1)
+        # Sets up 'Damage' and 'Heal' buttons.
+        self.dmg_hl_border = tk.Frame(self.right_frame, bg=self.colors["border"])
+        self.dmg_hl_border.grid(row=3, column=0, sticky="ew", padx=1, pady=1)
+        self.dmg_hl_border.grid_columnconfigure(0, weight=1)
+        self.dmg_hl_border.grid_rowconfigure(0, weight=1)
+        self.dmg_hl_btn_frame = tk.Frame(self.dmg_hl_border, bg=self.colors["button_bg"])
+        self.dmg_hl_btn_frame.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self.dmg_hl_btn_frame.grid_columnconfigure(0, weight=1)
+        self.dmg_hl_btn_frame.grid_columnconfigure(1, weight=1)
+        self.dmg_hl_btn_frame.grid_rowconfigure(0, weight=1)
+        # 'Damage' and 'Heal' button configurations
+        self.dmg_btn = ttk.Button(self.dmg_hl_btn_frame, text="Damage", command=self._on_damage_apply)
+        self.dmg_btn.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self.hl_btn = ttk.Button(self.dmg_hl_btn_frame, text="Heal", command=self._on_heal_apply)
+        self.hl_btn.grid(row=0, column=1, sticky="ew", padx=1, pady=1)
         self.render_right_panel()
     def _setup_log_frame(self):
         # Log panel frame configuration.
@@ -657,7 +721,6 @@ class Window:
         current = self.tracker.warriors[self.tracker.current_warrior_index]
         current_iid = str(id(current))
         self._suppress_select = True
-        self.init_tree.selection_set(current_iid)
         self.init_tree.focus(current_iid)
         self.init_tree.see(current_iid)
         self._suppress_select = False
@@ -682,6 +745,7 @@ class Window:
         if w is None:
             return
         self.selected_warrior = w
+        self.init_tree.selection_remove(self.init_tree.selection())
         self.render_roster()
     # Handler for scrollbar binding in central panel.
     def _on_roster_select(self, event=None):
@@ -694,6 +758,7 @@ class Window:
         w = self._roster_iid_to_warrior.get(iid)
         if w is not None:
             self.selected_warrior = w
+            self.roster.selection_remove(self.roster.selection())
             self.render_right_panel()
     # Ties tracker.next_turn() and render_initiative() together.
     def _on_next_turn(self):
@@ -731,7 +796,6 @@ class Window:
             sel_iid = str(id(self.selected_warrior))
             if sel_iid in self._roster_iid_to_warrior:
                 self._suppress_select = True
-                self.roster.selection_set(sel_iid)
                 self.roster.focus(sel_iid)
                 self.roster.see(sel_iid)
                 self._suppress_select = False
@@ -880,6 +944,15 @@ class Window:
         self._last_side = payload["side"]
         # Close modal
         self._aw_win.destroy()
+        # Handles adding if combat has started.
+        if self._combat_started:
+            ties = self.tracker.get_initiative_ties()
+            if w.initiative in ties and len(ties[w.initiative]) >= 2:
+                self._open_tie_breaker_modal({w.initiative: ties[w.initiative]})
+                self._tb_win.transient(self.root)
+                self._tb_win.grab_set()
+                self._tb_win.wait_window()
+                self.tracker.sort_warriors()
         # Refresh displays
         self.render_initiative()
         self.render_roster()
@@ -916,6 +989,8 @@ class Window:
             self._tb_win.transient(self.root)
             self._tb_win.grab_set()
             self._tb_win.wait_window()
+            if getattr(self, "_tb_cancelled", False):
+                return
             self.tracker.sort_warriors()
         self.tracker.current_warrior_index = 0
         self.tracker.round_number = 1
@@ -928,17 +1003,19 @@ class Window:
         self.render_right_panel()
     # Modal for handling tied initiative.
     def _open_tie_breaker_modal(self, ties):
+        self._tb_cancelled = False
         self._tb_groups = {}
         # Establishes modal.
         self._tb_win = tk.Toplevel(self.root)
         self._tb_win.title("Resolve Initiative Ties")
+        self._tb_win.resizable(False, False)
         self._tb_win.grid_columnconfigure(0, weight=1)
         self._tb_win.grid_rowconfigure(0, weight=1)
         # Creates border and panel frames.
         self._tb_border = tk.Frame(self._tb_win, bg=self.colors["border"])
         self._tb_border.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        self._tb_border.grid_columnconfigure(0, weight=0)
-        self._tb_border.grid_rowconfigure(0, weight=0)
+        self._tb_border.grid_columnconfigure(0, weight=1)
+        self._tb_border.grid_rowconfigure(0, weight=1)
         self._tb_panel = tk.Frame(self._tb_border, bg=self.colors["panel_bg"])
         self._tb_panel.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self._tb_panel.grid_columnconfigure(0, weight=1)
@@ -948,11 +1025,13 @@ class Window:
         # Header row.
         self._header_border = tk.Frame(self._tb_panel, bg=self.colors["border"])
         self._header_border.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self._header_border.grid_columnconfigure(0, weight=1)
         self._header = tk.Frame(self._header_border, bg=self.colors["label_bg"])
         self._header.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         self._header.grid_columnconfigure(0, weight=1)
-        self._header_lbl = tk.Label(self._header, text="Tied initiatives detected. Adjust order within each group.", bg=self.colors["label_bg"], anchor="w")
+        self._header_lbl = tk.Label(self._header, text="Initiative ties detected. Adjust order within each group.", bg=self.colors["label_bg"], anchor="w")
         self._header_lbl.grid(row=0, column=0, sticky="w")
+        self._header_lbl.grid_columnconfigure(0, weight=1)
         # Groups row.
         self._tb_body = tk.Frame(self._tb_panel, bg=self.colors["panel_bg"])
         self._tb_body.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
@@ -964,6 +1043,7 @@ class Window:
             # Outer border + inner panel
             group_border = tk.Frame(self._tb_body, bg=self.colors["border"])
             group_border.grid(row=i, column=0, sticky="nsew", padx=2, pady=2)
+            group_border.grid_columnconfigure(0, weight=1)
             group_panel = tk.Frame(group_border, bg=self.colors["panel_bg"])
             group_panel.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
             group_panel.grid_columnconfigure(0, weight=1)  # listbox column
@@ -972,6 +1052,7 @@ class Window:
             # Title row
             title_border = tk.Frame(group_panel, bg=self.colors["border"])
             title_border.grid(row=0, column=0, columnspan=2, sticky="ew", padx=1, pady=1)
+            title_border.grid_columnconfigure(0, weight=1)
             title_inner = tk.Frame(title_border, bg=self.colors["label_bg"])
             title_inner.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
             tk.Label(title_inner, text=f"Initiative {init_val}", bg=self.colors["label_bg"]).grid(row=0, column=0, sticky="w")
@@ -984,19 +1065,81 @@ class Window:
             # Buttons (Up/Down)
             btn_frame = tk.Frame(group_panel, bg=self.colors["button_bg"])
             btn_frame.grid(row=1, column=1, sticky="ns", padx=2, pady=2)
-            ttk.Button(btn_frame, text="↑", command=lambda v=init_val: self._tb_move_up(v)).grid(row=0, column=0, pady=1)
-            ttk.Button(btn_frame, text="↓", command=lambda v=init_val: self._tb_move_down(v)).grid(row=1, column=0, pady=1)
+            ttk.Button(btn_frame, text="↑", command=lambda v=init_val: self._tb_move_up(v)).grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+            ttk.Button(btn_frame, text="↓", command=lambda v=init_val: self._tb_move_down(v)).grid(row=1, column=0, sticky="ew", padx=1, pady=1)
             # Track this group for later
             self._tb_groups[init_val] = {"list": listbox, "ids": [id(w) for w in ordered]}
         # Buttons row.
         self._tb_footer_border = tk.Frame(self._tb_panel, bg=self.colors["border"])
         self._tb_footer_border.grid(row=2, column=0, sticky="ew", padx=1, pady=1)
+        self._tb_footer_border.grid_columnconfigure(0, weight=1)
         self._tb_footer = tk.Frame(self._tb_footer_border, bg=self.colors["button_bg"])
         self._tb_footer.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         self._tb_footer.grid_columnconfigure(0, weight=1)
         self._tb_footer.grid_columnconfigure(1, weight=1)
         ttk.Button(self._tb_footer, text="Apply Order", command=self._tb_apply).grid(row=0, column=0, padx=1, pady=1)
         ttk.Button(self._tb_footer, text="Cancel", command=self._tb_cancel).grid(row=0, column=1, padx=1, pady=1)
+    # Moves selection up in tiebreaker mode.
+    def _tb_move_up(self, init_val):
+        lb = self._tb_groups[init_val]["list"]
+        ids = self._tb_groups[init_val]["ids"]
+        sel = lb.curselection()
+        if not sel: return
+        i = sel[0]
+        if i == 0: return
+        # swap ids
+        ids[i-1], ids[i] = ids[i], ids[i-1]
+        # swap listbox rows
+        txt = lb.get(i)
+        above = lb.get(i-1)
+        lb.delete(i-1, i)
+        lb.insert(i-1, txt)
+        lb.insert(i, above)
+        lb.selection_clear(0, "end")
+        lb.selection_set(i-1)
+        lb.see(i-1)
+    # Moves selection down in tiebreaker mode.
+    def _tb_move_down(self, init_val):
+        lb = self._tb_groups[init_val]["list"]
+        ids = self._tb_groups[init_val]["ids"]
+        sel = lb.curselection()
+        if not sel: return
+        i = sel[0]
+        if i >= lb.size() - 1: return
+        # swap ids
+        ids[i+1], ids[i] = ids[i], ids[i+1]
+        # swap listbox rows
+        txt = lb.get(i)
+        below = lb.get(i+1)
+        lb.delete(i, i+1)
+        lb.insert(i, below)
+        lb.insert(i+1, txt)
+        lb.selection_clear(0, "end")
+        lb.selection_set(i+1)
+        lb.see(i+1)
+    # Apply button wiring.
+    def _tb_apply(self):
+        # map: python id -> Warrior (fast lookup)
+        id_to_w = {id(w): w for w in self.tracker.warriors}
+        for init_val, grp in self._tb_groups.items():
+            for rank, wid in enumerate(grp["ids"]):
+                w = id_to_w.get(wid)
+                if w is None: continue
+                # Only set within its tied init (defensive)
+                if w.initiative == init_val:
+                    w.tiebreak_priority = rank
+        self._tb_cancelled = False
+        self._tb_win.destroy()
+    # Cancel button wiring.
+    def _tb_cancel(self):
+        self._tb_cancelled = True
+        self._tb_win.destroy()
+    # Handles damage application.
+    def _on_damage_apply(self):
+        pass
+    # Handles healing application.
+    def _on_heal_apply(self):
+        pass
 
 # Primary function/entry point.
 #def main():
