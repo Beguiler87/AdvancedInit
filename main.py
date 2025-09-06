@@ -424,6 +424,7 @@ class Window:
         if not isinstance(tracker, Tracker):
             raise TypeError("Error: no Tracker instance present.")
         self.tracker = tracker
+        self.root = tk.Tk()
         self.open_add_modal_on_start = open_add_modal_on_start
         self.cons_catalog = cons_catalog
         self.breaks_conc = breaks_conc
@@ -433,6 +434,12 @@ class Window:
         self._iid_to_warrior = {}
         self.selected_warrior = None
         self._combat_started = False
+        self.var_target = tk.StringVar()
+        self._target_values = []
+        self.var_amount = tk.StringVar()
+        self._target_index_to_warrior = []
+        self.var_resurrection = tk.BooleanVar(value=False)
+        self.status_text = tk.StringVar(value="")
         self.colors = {
             "panel_bg": "lemonchiffon3",
             "list_bg": "ivory2",
@@ -445,7 +452,6 @@ class Window:
         self.tags = {"current": "current_actor", "slain": "slain"}
         self._roster_iid_to_warrior = {}
         # Builds the tkinter root.
-        self.root = tk.Tk()
         self.root.withdraw() # Hides the first iteration of the gui window for better sizing operation.
         # Pulls the title into the gui display.
         self.root.title(title)
@@ -645,9 +651,16 @@ class Window:
         self.hp_mng.grid_columnconfigure(3, weight=0, uniform="r2", minsize=120)
         self.hp_mng.grid_rowconfigure(0, weight=1)
         self.hp_mng.grid_rowconfigure(1, weight=0)
-        self.hp_mng.grid_rowconfigure(2, weight=1, minsize = 24)
+        self.hp_mng.grid_rowconfigure(2, weight=0, minsize = 24)
         self.hp_mng.grid_rowconfigure(3, weight=0)
-        # HP management widgets.
+        self.ds_frame = tk.Frame(self.hp_mng, bg=self.colors["border"])
+        self.ds_frame.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=1, pady=1)
+        self.ds_frame.grid_columnconfigure(0, weight=1)
+        self.ds_frame.grid_columnconfigure(1, weight=1)
+        self.ds_frame.grid_columnconfigure(2, weight=1)
+        self.ds_frame.grid_columnconfigure(3, weight=1)
+        self.ds_frame.grid_rowconfigure(0, weight=1)
+        # HP management widget framing.
         self.targeter_border = tk.Frame(self.hp_mng, bg=self.colors["border"])
         self.targeter_border.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.targeter_border.grid_columnconfigure(0, weight=1)
@@ -672,10 +685,13 @@ class Window:
         self.valid_border.grid_rowconfigure(0, weight=1)
         self.valid_inline = tk.Frame(self.valid_border, bg=self.colors["button_bg"])
         self.valid_inline.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
-        self.fail_btn = ttk.Button(self.hp_mng, text="Fail", command=self.warrior.fail_death_saves(is_critical=False))
-        self.fail_btn.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
-        self.crit_fail_btn = ttk.Button(self.hp_mng, text="2 Fails", command=self.warrior.fail_death_saves(is_critical=True))
-        self.crit_fail_btn.grid(row=1, column=1, sticky="nsew", padx=1, pady=1)
+        # Sets up 'Status' strip.
+        self.status_border = tk.Frame(self.hp_mng, bg=self.colors["border"])
+        self.status_border.grid(row=2, column=0, columnspan=4, sticky="ew", padx=1, pady=1)
+        self.status_border.grid_columnconfigure(0, weight=1)
+        self.status_border.grid_rowconfigure(0, weight=1)
+        self.status_panel = tk.Frame(self.status_border, bg=self.colors["button_bg"])
+        self.status_panel.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         # Sets up 'Damage' and 'Heal' buttons.
         self.dmg_hl_border = tk.Frame(self.right_frame, bg=self.colors["border"])
         self.dmg_hl_border.grid(row=3, column=0, sticky="ew", padx=1, pady=1)
@@ -691,6 +707,25 @@ class Window:
         self.dmg_btn.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         self.hl_btn = ttk.Button(self.dmg_hl_btn_frame, text="Heal", command=self._on_heal_apply)
         self.hl_btn.grid(row=0, column=1, sticky="ew", padx=1, pady=1)
+        # HP management widgets.
+        self.targeting = ttk.Combobox(self.targeter, state="readonly", textvariable=self.var_target)
+        self.targeting.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.amount_entry_point = tk.Entry(self.amnt_entry, textvariable=self.var_amount, justify="right")
+        self.amount_entry_point.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.res_checkbox = tk.Checkbutton(self.res_toggle, text="Resurrection", variable=self.var_resurrection)
+        self.res_checkbox.grid(row=0, column=0, sticky="w", padx=1, pady=1)
+        self.status_lbl = tk.Label(self.status_panel, textvariable=self.status_text)
+        self.status_lbl.grid(row=0, column=0, sticky="ew")
+        # Death saving throw buttons
+        self.fail_btn = ttk.Button(self.ds_frame, text="DS Failure", command=self._on_ds_fail)
+        self.fail_btn.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
+        self.crit_fail_btn = ttk.Button(self.ds_frame, text="Critical Failure", command=self._on_ds_crit_fail)
+        self.crit_fail_btn.grid(row=1, column=1, sticky="nsew", padx=1, pady=1)
+        self.pass_btn = ttk.Button(self.ds_frame, text="DS Success", command=self._on_ds_success)
+        self.pass_btn.grid(row=1, column=2, sticky="nsew", padx=1, pady=1)
+        self.crit_pass_btn = ttk.Button(self.ds_frame, text="Critical Success", command=self._on_ds_crit_success)
+        self.crit_pass_btn.grid(row=1, column=3, sticky="nsew", padx=1, pady=1)
+        # Renders the right panel and its contents.
         self.render_right_panel()
     def _setup_log_frame(self):
         # Log panel frame configuration.
@@ -1136,11 +1171,114 @@ class Window:
         self._tb_win.destroy()
     # Handles damage application.
     def _on_damage_apply(self):
-        pass
+        cause = None
+        w = self._get_selected_warrior()
+        (ok_amt, n) = self._parse_amount()
+        if w is None:
+            self.status_text.set("Select a target.")
+            return
+        if not ok_amt:
+            self.status_text.set("Enter a non-negative integer amount.")
+            return
+        hp_before = w.hp_current
+        result = w.take_damage(n, is_critical=False)
+        breaks = {x.lower() for x in BREAKS_CONCENTRATION}
+        if result == "slain":
+            cause = "slain"
+        elif result == "dying":
+            cause = "dying"
+        else:
+            for c in w.conditions:
+                if c.name.lower() in breaks:
+                    cause = c.name
+                    break
+        conc = w._find_condition_by_name("concentration")
+        if cause and conc in w.conditions:
+            conc_dict = self.tracker.remove_condition(w, conc.condition_id)
+        hp_after = w.hp_current
+        self.render_initiative()
+        self.render_roster()
+        self._rebuild_target_options()
+        self._validate_hp_controls()
+        self.status_text.set("")
     # Handles healing application.
     def _on_heal_apply(self):
         pass
-
+    # Handlers for death saving throw buttons.
+    def _on_ds_fail(self):
+        pass
+    def _on_ds_crit_fail(self):
+        pass
+    def _on_ds_success(self):
+        pass
+    def _on_ds_crit_success(self):
+        pass
+    # Helper method for target widget.
+    def _rebuild_target_options(self):
+        prev_label = self.var_target.get()
+        if prev_label is not None and prev_label in self._target_values:
+            idx = self._target_values.index(prev_label)
+            prev_obj = self._target_index_to_warrior[idx]
+        else:
+            prev_obj = None
+        self._target_values.clear()
+        self._target_index_to_warrior.clear()
+        for w in self.tracker.warriors:
+            disp_lbl = f"{w.name} • {w.side} • ({w.hp_current}/{w.hp_current_max})"
+            self._target_values.append(disp_lbl)
+            self._target_index_to_warrior.append(w)
+        self.targeting["values"] = self._target_values
+        if prev_obj is not None and prev_obj in self._target_index_to_warrior:
+            new_idx = self._target_index_to_warrior.index(prev_obj)
+            self.var_target.set(self._target_values[new_idx])
+        else:
+            self.var_target.set("")
+        self._validate_hp_controls()
+    def _get_selected_warrior(self):
+        label = self.var_target.get()
+        if not label:
+            return None
+        try:
+            idx = self._target_values.index(label)
+        except ValueError:
+            return None
+        return self._target_index_to_warrior[idx]
+    def _parse_amount(self):
+        s = self.var_amount.get().strip()
+        if not s:
+            return (False, None)
+        try:
+            n = int(s, 10)
+        except ValueError:
+            return (False, None)
+        if n < 0:
+            return (False, None)
+        return (True, n)
+    # Enables/Disables Damage, Heal, and Death Save buttons, sets the status strip text.
+    def _validate_hp_controls(self):
+        w = self._get_selected_warrior()
+        ok_amt = self._parse_amount()
+        dmg_ok = (w is not None) and ok_amt
+        heal_ok = (w is not None) and ok_amt
+        ds_ok = bool(w and (w.hp_current == 0) and (not w.is_dead()))
+        if dmg_ok:
+            self.dmg_btn.state(["!disabled"])
+        else:
+            self.dmg_btn.state(["disabled"])
+        if heal_ok:
+            self.hl_btn.state(["!disabled"])
+        else:
+            self.hl_btn.state(["disabled"])
+        if ds_ok:
+            self.fail_btn.state(["!disabled"])
+            self.crit_fail_btn.state(["!disabled"])
+            self.pass_btn.state(["!disabled"])
+            self.crit_pass_btn.state(["!disabled"])
+        else:
+            self.fail_btn.state(["disabled"])
+            self.crit_fail_btn.state(["disabled"])
+            self.pass_btn.state(["disabled"])
+            self.crit_pass_btn.state(["disabled"])
 # Primary function/entry point.
 #def main():
     #tracker = Tracker()
