@@ -4,16 +4,14 @@ If you would like to use this project at your home table for a private game, ple
 
 -Hours Logged: 57.5
 
+Installation:
 Please note, you will need Python 3 or later to run this program. If you do not know how to install that, please review the following links (YouTube may also be helpful):
-
 For Windows:
 https://www.python.org/downloads/
 https://learn.microsoft.com/en-us/windows/python/beginners
-
 For Mac OS:
 https://www.python.org/downloads/macos/
 https://docs.python.org/3/using/mac.html
-
 For Linux:
 Let's be honest, you probably already know enough to do this without me telling you how...
 
