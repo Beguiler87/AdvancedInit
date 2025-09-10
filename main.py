@@ -440,9 +440,17 @@ class Window:
         self._target_index_to_warrior = []
         self.var_resurrection = tk.BooleanVar(value=False)
         self.status_text = tk.StringVar(value="")
+        self._cond_vars = {}
+        self._cond_checks = {}
+        self.var_cond_source = tk.StringVar(value="None")
+        self.var_cond_duration = tk.StringVar(value="")
+        self.var_cond_tick_when = tk.StringVar(value="<first option>")
+        self.var_cond_concentration_tie = tk.BooleanVar(value=False)
+        self._cond_targets_index_to_warrior = []
+        self._cond_cached_selection = {"source": "None", "targets": set(), "scroll": 0}
         self.colors = {
             "panel_bg": "lemonchiffon3",
-            "list_bg": "ivory2",
+            "list_bg": "ivory",
             "highlight": "turquoise3",
             "slain": "gray60",
             "border": "black",
@@ -643,7 +651,7 @@ class Window:
         self.hp_mng_border.grid(row=2, column=0, sticky="ew", padx=1, pady=1)
         self.hp_mng_border.grid_columnconfigure(0, weight=1)
         self.hp_mng_border.grid_rowconfigure(0, weight=1)
-        self.hp_mng = tk.Frame(self.hp_mng_border, bg=self.colors["list_bg"])
+        self.hp_mng = tk.Frame(self.hp_mng_border, bg=self.colors["panel_bg"])
         self.hp_mng.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.hp_mng.grid_columnconfigure(0, weight=3, uniform="r2")
         self.hp_mng.grid_columnconfigure(1, weight=1, uniform="r2", minsize = 50)
@@ -651,7 +659,7 @@ class Window:
         self.hp_mng.grid_columnconfigure(3, weight=0, uniform="r2")
         self.hp_mng.grid_rowconfigure(0, weight=1)
         self.hp_mng.grid_rowconfigure(1, weight=0)
-        self.hp_mng.grid_rowconfigure(2, weight=0, minsize = 24)
+        self.hp_mng.grid_rowconfigure(2, weight=0)
         self.hp_mng.grid_rowconfigure(3, weight=0)
         self.ds_frame = tk.Frame(self.hp_mng, bg=self.colors["border"])
         self.ds_frame.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=1, pady=1)
@@ -681,7 +689,7 @@ class Window:
         self.res_toggle.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         # Sets up 'Status' strip.
         self.status_border = tk.Frame(self.hp_mng, bg=self.colors["border"])
-        self.status_border.grid(row=4, column=0, columnspan=4, sticky="ew", padx=1, pady=1)
+        self.status_border.grid(row=3, column=0, columnspan=4, sticky="ew", padx=1, pady=1)
         self.status_border.grid_columnconfigure(0, weight=1)
         self.status_border.grid_rowconfigure(0, weight=1)
         self.status_panel = tk.Frame(self.status_border, bg=self.colors["button_bg"])
@@ -722,6 +730,79 @@ class Window:
         self.pass_btn.grid(row=1, column=2, sticky="nsew", padx=1, pady=1)
         self.crit_pass_btn = ttk.Button(self.ds_frame, text="Critical Success", command=self._on_ds_crit_success)
         self.crit_pass_btn.grid(row=1, column=3, sticky="nsew", padx=1, pady=1)
+        # Conditions panel frames.
+        self.conditions_border = tk.Frame(self.right_frame, bg=self.colors["border"])
+        self.conditions_border.grid(row=4, column=0, sticky="nsew", padx=1, pady=1)
+        self.conditions_border.grid_columnconfigure(0, weight=1)
+        self.conditions_border.grid_rowconfigure(0, weight=1)
+        self.conditions_panel = tk.Frame(self.conditions_border, bg=self.colors["panel_bg"])
+        self.conditions_panel.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.conditions_panel.grid_columnconfigure(0, weight=1)
+        self.conditions_panel.grid_rowconfigure(0, weight=0)
+        self.conditions_panel.grid_rowconfigure(1, weight=1)
+        self.conditions_panel.grid_rowconfigure(2, weight=1)
+        self.conditions_panel.grid_rowconfigure(3, weight=1)
+        # Conditions header.
+        self.conditions_header_border = tk.Frame(self.conditions_panel, bg=self.colors["border"])
+        self.conditions_header_border.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self.conditions_header_border.grid_columnconfigure(0, weight=1)
+        self.conditions_header_border.grid_rowconfigure(0, weight=1)
+        self.conditions_header = tk.Frame(self.conditions_header_border, bg=self.colors["button_bg"])
+        self.conditions_header.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self.conditions_header.grid_columnconfigure(0, weight=1)
+        self.conditions_header.grid_rowconfigure(0, weight=1)
+        self.conditions_header_lbl = tk.Label(self.conditions_header, text="Conditions", bg=self.colors["button_bg"])
+        self.conditions_header_lbl.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        # Conditions list and checkbox gridding (3 columns, 6 rows).
+        self.condlist_border = tk.Frame(self.conditions_panel, bg=self.colors["border"])
+        self.condlist_border.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
+        self.condlist_border.grid_columnconfigure(0, weight=1)
+        self.condlist_border.grid_rowconfigure(0, weight=1)
+        self.condlist = tk.Frame(self.condlist_border, bg=self.colors["list_bg"])
+        self.condlist.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.condlist.grid_columnconfigure(0, weight=1)
+        self.condlist.grid_columnconfigure(1, weight=1)
+        self.condlist.grid_columnconfigure(2, weight=1)
+        self.condlist.grid_rowconfigure(0, weight=1)
+        self.condlist.grid_rowconfigure(1, weight=1)
+        self.condlist.grid_rowconfigure(2, weight=1)
+        self.condlist.grid_rowconfigure(3, weight=1)
+        self.condlist.grid_rowconfigure(4, weight=1)
+        self.condlist.grid_rowconfigure(5, weight=1)
+        # Condition checkboxes builder.
+        for idx, name in enumerate(CONDITIONS):
+            row = idx % 6
+            col = idx // 6
+            var = tk.BooleanVar(value=False)
+            self._cond_vars[name] = var
+            self.cond_checkboxes = tk.Checkbutton(self.condlist, text=name, variable=var, anchor="w", bg=self.colors["list_bg"])
+            self.cond_checkboxes.grid(row=row, column=col, sticky="ew", padx=1, pady=1)
+        # Source and Targets for conditions.
+        self.sandt_border = tk.Frame(self.conditions_panel, bg=self.colors["border"])
+        self.sandt_border.grid(row=2, column=0, sticky="nsew", padx=1, pady=1)
+        self.sandt_border.grid_columnconfigure(0, weight=1)
+        self.sandt_border.grid_rowconfigure(0, weight=1)
+        self.sandt_panel = tk.Frame(self.sandt_border, bg=self.colors["button_bg"])
+        self.sandt_panel.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.sandt_panel.grid_columnconfigure(0, weight=1)
+        self.sandt_panel.grid_columnconfigure(1, weight=1)
+        self.sandt_panel.grid_rowconfigure(0, weight=1)
+        self.sandt_panel.grid_rowconfigure(1, weight=1)
+        # Source list.
+        self.cond_sources = ttk.Combobox(self.sandt_panel, state="readonly", values=["None"] + [w.name for w in self.tracker.warriors], textvariable=self.var_cond_source)
+        self._cond_source_items = [None]
+        for w in self.tracker.warriors:
+            self._cond_source_items.append(w)
+
+        # Condition details.
+        self.cond_details_border = tk.Frame(self.conditions_panel, bg=self.colors["border"])
+        self.cond_details_border.grid(row=3, column=0, sticky="nsew", padx=1, pady=1)
+        self.cond_details_border.grid_columnconfigure(0, weight=1)
+        self.cond_details_border.grid_rowconfigure(0, weight=1)
+        self.cond_details = tk.Frame(self.cond_details_border, bg=self.colors["panel_bg"])
+        self.cond_details.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.cond_details.grid_columnconfigure(0, weight=1)
+        self.cond_details.grid_rowconfigure(0, weight=1)
         # Renders the right panel and its contents.
         self.render_right_panel()
         self._rebuild_target_options()
