@@ -448,6 +448,7 @@ class Window:
         self.var_cond_concentration_tie = tk.BooleanVar(value=False)
         self._cond_targets_index_to_warrior = []
         self._cond_cached_selection = {"source": "None", "targets": set(), "scroll": 0}
+        self._cond_checks = {}
         self.colors = {
             "panel_bg": "lemonchiffon3",
             "list_bg": "ivory",
@@ -498,6 +499,7 @@ class Window:
         self._setup_left_frame()
         self._setup_central_frame()
         self._setup_right_frame()
+        self._update_concentration_toggle_state()
         self._setup_log_frame()
     # Defines panels and contents.
     def _setup_left_frame(self):
@@ -715,7 +717,7 @@ class Window:
         self.targeting = ttk.Combobox(self.targeter, state="readonly", textvariable=self.var_target)
         self.targeting.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.targeting.bind("<<ComboboxSelected>>", lambda e: self._validate_hp_controls())
-        self.amount_entry_point = tk.Entry(self.amnt_entry, textvariable=self.var_amount, justify="left")
+        self.amount_entry_point = tk.Entry(self.amnt_entry, textvariable=self.var_amount, justify="left", bg=self.colors["list_bg"])
         self.amount_entry_point.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.res_checkbox = tk.Checkbutton(self.res_toggle, text="Resurrection", variable=self.var_resurrection)
         self.res_checkbox.grid(row=0, column=0, sticky="w", padx=1, pady=1)
@@ -775,8 +777,11 @@ class Window:
             col = idx // 6
             var = tk.BooleanVar(value=False)
             self._cond_vars[name] = var
-            self.cond_checkboxes = tk.Checkbutton(self.condlist, text=name, variable=var, anchor="w", bg=self.colors["list_bg"])
-            self.cond_checkboxes.grid(row=row, column=col, sticky="ew", padx=1, pady=1)
+            cb = tk.Checkbutton(self.condlist, text=name, variable=var, anchor="w", bg=self.colors["list_bg"])
+            cb.grid(row=row, column=col, sticky="ew", padx=1, pady=1)
+            self._cond_checks[name] = cb
+            if name in ("slain", "dying"):
+                self._cond_checks[name].configure(state="disabled")
         # Source and Targets for conditions.
         self.sandt_border = tk.Frame(self.conditions_panel, bg=self.colors["border"])
         self.sandt_border.grid(row=2, column=0, sticky="nsew", padx=1, pady=1)
@@ -784,17 +789,34 @@ class Window:
         self.sandt_border.grid_rowconfigure(0, weight=1)
         self.sandt_panel = tk.Frame(self.sandt_border, bg=self.colors["button_bg"])
         self.sandt_panel.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
-        self.sandt_panel.grid_columnconfigure(0, weight=1)
+        self.sandt_panel.grid_columnconfigure(0, weight=0)
         self.sandt_panel.grid_columnconfigure(1, weight=1)
         self.sandt_panel.grid_rowconfigure(0, weight=1)
         self.sandt_panel.grid_rowconfigure(1, weight=1)
+        # Source label.
+        self.cond_source_lbl = tk.Label(self.sandt_panel, text="Condition Source", bg=self.colors["button_bg"], justify="left")
+        self.cond_source_lbl.grid(row=0, column=0, sticky="ew")
         # Source list.
         self.cond_sources = ttk.Combobox(self.sandt_panel, state="readonly", values=["None"] + [w.name for w in self.tracker.warriors], textvariable=self.var_cond_source)
+        self.cond_sources.grid(row=0, column=1, sticky="ew", padx=1, pady=1)
         self._cond_source_items = [None]
         for w in self.tracker.warriors:
             self._cond_source_items.append(w)
-
-        # Condition details.
+        # Targets label.
+        self.targs_lbl = tk.Label(self.sandt_panel, text="Targets", bg=self.colors["button_bg"], justify="left")
+        self.targs_lbl.grid(row=1, column=0, sticky="ew", padx=1, pady=1)
+        # Targets listbox.
+        self.targets_list_frame = tk.Frame(self.sandt_panel, bg=self.colors["button_bg"])
+        self.targets_list_frame.grid(row=1, column=1, sticky="nsew", padx=1, pady=1)
+        self.targets_list_frame.grid_columnconfigure(0, weight=1)
+        self.targets_list_frame.grid_columnconfigure(1, weight=0)
+        self.targets_list_frame.grid_rowconfigure(0, weight=1)
+        self.targs = tk.Listbox(self.targets_list_frame, selectmode="extended", bg=self.colors["list_bg"])
+        self.targs.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        # Targets scrollbar.
+        self.targs_scroll = tk.Scrollbar(self.targets_list_frame, command=self.targs.yview)
+        self.targs_scroll.grid(row=0, column=1, sticky="ns")
+        # Condition details frames.
         self.cond_details_border = tk.Frame(self.conditions_panel, bg=self.colors["border"])
         self.cond_details_border.grid(row=3, column=0, sticky="nsew", padx=1, pady=1)
         self.cond_details_border.grid_columnconfigure(0, weight=1)
@@ -802,7 +824,28 @@ class Window:
         self.cond_details = tk.Frame(self.cond_details_border, bg=self.colors["panel_bg"])
         self.cond_details.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.cond_details.grid_columnconfigure(0, weight=1)
+        self.cond_details.grid_columnconfigure(1, weight=1)
+        self.cond_details.grid_columnconfigure(2, weight=1)
+        self.cond_details.grid_columnconfigure(3, weight=1)
         self.cond_details.grid_rowconfigure(0, weight=1)
+        # Condition details controls.
+        # Duration.
+        self.duration_frame = tk.Frame(self.cond_details, bg=self.colors["button_bg"])
+        self.duration_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.duration_frame.grid_columnconfigure(0, weight=1)
+        self.duration_frame.grid_rowconfigure(0, weight=0)
+        self.duration_frame.grid_rowconfigure(1, weight=1)
+        self.duration_lbl = tk.Label(self.duration_frame, text="Duration (Rounds)", bg=self.colors["button_bg"], justify="left")
+        self.duration_lbl.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        self.duration_entry = tk.Entry(self.duration_frame, textvariable=self.var_cond_duration)
+        self.duration_entry.grid(row=1, column=0, sticky="ew", padx=1, pady=1)
+        self.var_cond_duration.trace_add("write", self._on_duration_change)
+        # Concentration.
+        self.tie_checkbox = tk.Checkbutton(self.cond_details, text="Concentration based?", variable=self.var_cond_concentration_tie, anchor="w")
+        self.tie_checkbox.grid(row=0, column=3, sticky="ew", padx=1, pady=1)
+        if self.var_cond_source.get() == "None":
+            self.tie_checkbox.configure(state="disabled")
+            self.var_cond_concentration_tie.set(False)
         # Renders the right panel and its contents.
         self.render_right_panel()
         self._rebuild_target_options()
@@ -1492,6 +1535,43 @@ class Window:
             self.pass_btn.state(["disabled"])
             self.crit_pass_btn.state(["disabled"])
         self._update_status_strip_for_target()
+    # Refreshes the condition sources and targets lists.
+    def _rebuild_cond_sources_and_targets(self):
+        prev_source_display = self.var_cond_source.get()
+        prev_target_indices = set(self.targs.curselection())
+        prev_scroll = self.targs.yview()[0]
+        roster_in_order = sorted(self.tracker.warriors, key=lambda w: w.name.lower())
+        display_list = [w.name for w in roster_in_order]
+        values = ["None"] + display_list
+        self._cond_source_items = [None] + roster_in_order
+        self.cond_sources['values'] = values
+        if prev_source_display in values:
+            self.var_cond_source.set(prev_source_display)
+        else:
+            self.var_cond_source.set("None")
+        self.targs.delete(0, tk.END)
+        self._cond_targets_index_to_warrior = []
+        for display_str, w in zip(display_list, roster_in_order):
+            self.targs.insert(tk.END, display_str)
+            self._cond_targets_index_to_warrior.append(w)
+        for idx in prev_target_indices:
+            if 0 <= idx < len(self._cond_targets_index_to_warrior):
+                self.targs.selection_set(idx)
+        if prev_scroll is not None and self.targs.size() > 0:
+            self.targs.yview_moveto(prev_scroll)
+        self._update_concentration_toggle_state()
+        self._validate_conditions_block()
+    # Updates concentration toggle status.
+    def _update_concentration_toggle_state(self):
+        val = self.var_cond_source.get()
+        if val == "None":
+            self.tie_checkbox.configure(state="disabled")
+            self.var_cond_concentration_tie.set(False)
+        else:
+            self.tie_checkbox.configure(state="normal")
+    # Duration handler.
+    def _on_duration_change(self, *args):
+        self._validate_conditions_block()
     # Logging helper.
     def _log(self):
         pass
