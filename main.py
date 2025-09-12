@@ -442,11 +442,13 @@ class Window:
         self.status_text = tk.StringVar(value="")
         self._cond_vars = {}
         self._cond_checks = {}
-        self.var_cond_source = tk.StringVar(value="None")
         self.var_cond_duration = tk.StringVar(value="")
-        self.var_cond_tick_when = tk.StringVar(value="<first option>")
+        self.var_cond_tick_timing = tk.StringVar(value="start")
+        self.var_cond_tick_owner = tk.StringVar(value="target")
         self.var_cond_concentration_tie = tk.BooleanVar(value=False)
+        self.var_cond_source = tk.StringVar(value="None")
         self._cond_targets_index_to_warrior = []
+        self._conc_tie_counts = {}
         self._cond_cached_selection = {"source": "None", "targets": set(), "scroll": 0}
         self._cond_checks = {}
         self.colors = {
@@ -821,31 +823,46 @@ class Window:
         self.cond_details_border.grid(row=3, column=0, sticky="nsew", padx=1, pady=1)
         self.cond_details_border.grid_columnconfigure(0, weight=1)
         self.cond_details_border.grid_rowconfigure(0, weight=1)
-        self.cond_details = tk.Frame(self.cond_details_border, bg=self.colors["panel_bg"])
+        self.cond_details = tk.Frame(self.cond_details_border, bg=self.colors["button_bg"])
         self.cond_details.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.cond_details.grid_columnconfigure(0, weight=1)
         self.cond_details.grid_columnconfigure(1, weight=1)
         self.cond_details.grid_columnconfigure(2, weight=1)
         self.cond_details.grid_columnconfigure(3, weight=1)
-        self.cond_details.grid_rowconfigure(0, weight=1)
-        # Condition details controls.
-        # Duration.
-        self.duration_frame = tk.Frame(self.cond_details, bg=self.colors["button_bg"])
-        self.duration_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
-        self.duration_frame.grid_columnconfigure(0, weight=1)
-        self.duration_frame.grid_rowconfigure(0, weight=0)
-        self.duration_frame.grid_rowconfigure(1, weight=1)
-        self.duration_lbl = tk.Label(self.duration_frame, text="Duration (Rounds)", bg=self.colors["button_bg"], justify="left")
+        self.cond_details.grid_rowconfigure(0, weight=0)
+        self.cond_details.grid_rowconfigure(1, weight=1)
+        self.cond_details.grid_rowconfigure(2, weight=1)
+        # Condition duration.
+        self.duration_lbl = tk.Label(self.cond_details, text="Rounds:", bg=self.colors["button_bg"], justify="center", width=12)
         self.duration_lbl.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
-        self.duration_entry = tk.Entry(self.duration_frame, textvariable=self.var_cond_duration)
+        self.duration_entry = tk.Entry(self.cond_details, textvariable=self.var_cond_duration, width=8)
         self.duration_entry.grid(row=1, column=0, sticky="ew", padx=1, pady=1)
         self.var_cond_duration.trace_add("write", self._on_duration_change)
+        # Condition tick timing.
+        self.tick_time_lbl = tk.Label(self.cond_details, text="Tick timing:", bg=self.colors["button_bg"], font=("TkDefaultFont", 10), justify="center", width=6)
+        self.tick_time_lbl.grid(row=0, column=1, sticky="ew", padx=1, pady=1)
+        self.tick_time = ttk.Combobox(self.cond_details, state="readonly", values=["start", "end"], textvariable=self.var_cond_tick_timing)
+        self.tick_time.grid(row=1, column=1, sticky="ew", padx=1, pady=1)
+        self.tick_time.bind("<<ComboboxSelected>>", lambda e: self._validate_conditions_block())
+        # Condition tick owner.
+        self.tick_owner_lbl = tk.Label(self.cond_details, text="Tick owner:", bg=self.colors["button_bg"], font=("TkDefaultFont", 10), justify="center", width=6)
+        self.tick_owner_lbl.grid(row=0, column=2, sticky="ew", padx=1, pady=1)
+        self.tick_owner = ttk.Combobox(self.cond_details, state="readonly", values=["none", "target", "source"], textvariable=self.var_cond_tick_owner)
+        self.tick_owner.grid(row=1, column=2, sticky="ew", padx=1, pady=1)
+        self.tick_owner.bind("<<ComboboxSelected>>", lambda e: self._validate_conditions_block())
         # Concentration.
-        self.tie_checkbox = tk.Checkbutton(self.cond_details, text="Concentration based?", variable=self.var_cond_concentration_tie, anchor="w")
-        self.tie_checkbox.grid(row=0, column=3, sticky="ew", padx=1, pady=1)
+        self.tie_lbl = tk.Label(self.cond_details, text="Conc.?", bg=self.colors["button_bg"], justify="center", width=12)
+        self.tie_lbl.grid(row=0, column=3, sticky="nsew", padx=1, pady=1)
+        self.tie_checkbox = tk.Checkbutton(self.cond_details, variable=self.var_cond_concentration_tie, justify="center", width=12)
+        self.tie_checkbox.grid(row=1, column=3, sticky="nsew", padx=1, pady=1)
         if self.var_cond_source.get() == "None":
             self.tie_checkbox.configure(state="disabled")
             self.var_cond_concentration_tie.set(False)
+        # 'Add' and 'Clear' condition buttons.
+        self.add_cond_btn = ttk.Button(self.cond_details, text="Add Condition", command=self._on_conditions_apply, state="disabled")
+        self.add_cond_btn.grid(row=2, column=0, columnspan=2, sticky="ew", padx=1, pady=1)
+        self.clear_cond_btn = ttk.Button(self.cond_details, text="Clear Condition", command=self._on_conditions_clear, state="disabled")
+        self.clear_cond_btn.grid(row=2, column=2, columnspan=2, sticky="ew", padx=1, pady=1)
         # Renders the right panel and its contents.
         self.render_right_panel()
         self._rebuild_target_options()
@@ -860,6 +877,74 @@ class Window:
         self.log_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.log_frame.grid_columnconfigure(0, weight=1)
         self.log_frame.grid_rowconfigure(0, weight=1)
+    # Apply condition button wiring.
+    def _on_conditions_apply(self):
+        indices = self.targs.curselection()
+        targets = [ self._cond_targets_index_to_warrior[i] for i in indices]
+        idx = self.cond_sources.current()
+        source = self._cond_source_items[idx]
+        if idx == 0:
+            source = None
+        raw = self.var_cond_duration.get().strip()
+        timing = self.var_cond_tick_timing.get()
+        owner = self.var_cond_tick_owner.get()
+        if owner == "none":
+            owner = None
+        tie = self.var_cond_concentration_tie.get()
+        names = [name for name, v in self._cond_vars.items() if v.get() and name not in {"slain", "dying", "unconscious", "stable", "concentration"}]
+        duration = None if raw == "" else int(raw)
+        added_ties = 0
+        if not targets or not names:
+            return
+        for target in targets:
+            for cond_name in names:
+                cond = Condition(name=cond_name, duration=duration, tick_timing=timing, tick_owner=owner, source=source, target=target, expires_with_source=("concentration" if tie else None))
+                token = target.apply_condition(cond)
+                if token == "duplicate_ignored":
+                    self._log(f"{cond_name} already on {target.name}, skipped.")
+                elif token == "concentration_replace_requested":
+                    self._log(f"{source.name} already has Concentration; replacement needed for {cond_name}.")
+                elif token == "added_breaks_concentration":
+                    self._log(f"{target.name} is now {cond_name} (breaks concentration).")
+                elif token == "added":
+                    dur_text = "indefinite" if duration is None else f"{duration} rounds"
+                    owner_text = owner or "none"
+                    self._log(f"Applied {cond_name} ({dur_text}, {timing}/{owner_text}) from {source.name if source else 'None'} to {target.name}.")
+                if tie and source is not None and token in ("added", "added_breaks_concentration"):
+                    added_ties += 1
+        for n in names:
+            self._cond_vars[n].set(False)
+        if tie and source is not None and source._find_condition_by_name("concentration") is None:
+            source.apply_condition(Condition("concentration", source=source, target=source))
+        if tie and source is not None and added_ties:
+            self._conc_tie_counts[source] = self._conc_tie_counts.get(source, 0) + added_ties
+        self._rebuild_cond_sources_and_targets()
+        self._validate_conditions_block()
+    # Clear condition button wiring.
+    def _on_conditions_clear(self):
+        man_cons = {"slain","dying","unconscious","stable","concentration"}
+        names = [name for name, v in self._cond_vars.items() if v.get() and name not in man_cons]
+        indices = self.targs.curselection()
+        targets = [ self._cond_targets_index_to_warrior[i] for i in indices]
+        sources_to_check = set()
+        dec_by = {}
+        if not names or not targets:
+            return
+        for target in targets:
+            for cond in list(target.conditions):
+                if cond.name in names:
+                    target.remove_condition(cond)
+                    if cond.expires_with_source == "concentration" and cond.source is not None:
+                        sources_to_check.add(cond.source)
+                        dec_by[src] = dec_by.get(src, 0) + 1
+                    self._log(f"Cleared {cond.name} from {target.name}.")
+        for src in sources_to_check:
+            still_tied = any(c.expires_with_source == "concentration" and c.source is src, for w in self.tracker.warriors, for c in w.conditions)
+            if not still_tied:
+                conc = src._find_condition_by_name("concentration")
+                if conc is not None:
+                    src.remove_condition(conc)
+                    self._log(f"{src.name} stops concentrating (no tied effects remain)")
     # Used to refresh the initiative display.
     def render_initiative(self):
         if len(self.tracker.warriors) == 0:
@@ -1572,6 +1657,9 @@ class Window:
     # Duration handler.
     def _on_duration_change(self, *args):
         self._validate_conditions_block()
+    # Conditions block validation.
+    def _validate_conditions_block(self):
+        pass
     # Logging helper.
     def _log(self):
         pass
