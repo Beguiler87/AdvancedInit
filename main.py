@@ -936,15 +936,23 @@ class Window:
                     target.remove_condition(cond)
                     if cond.expires_with_source == "concentration" and cond.source is not None:
                         sources_to_check.add(cond.source)
-                        dec_by[src] = dec_by.get(src, 0) + 1
+                        dec_by[cond.src] = dec_by.get(cond.src, 0) + 1
                     self._log(f"Cleared {cond.name} from {target.name}.")
+        for src, n in dec_by.items():
+            self._conc_tie_counts[src] = max(0, self._conc_tie_counts.get(src, 0) - n)
         for src in sources_to_check:
-            still_tied = any(c.expires_with_source == "concentration" and c.source is src, for w in self.tracker.warriors, for c in w.conditions)
-            if not still_tied:
+            still_tied = any(
+                c.expires_with_source == "concentration" and c.source is src
+                for w in self.tracker.warriors
+                for c in w.conditions
+            )
+            if not still_tied and self._conc_tie_counts.get(src, 0) == 0:
                 conc = src._find_condition_by_name("concentration")
                 if conc is not None:
                     src.remove_condition(conc)
                     self._log(f"{src.name} stops concentrating (no tied effects remain)")
+        self._rebuild_cond_sources_and_targets()
+        self._validate_conditions_block()
     # Used to refresh the initiative display.
     def render_initiative(self):
         if len(self.tracker.warriors) == 0:
@@ -1659,7 +1667,39 @@ class Window:
         self._validate_conditions_block()
     # Conditions block validation.
     def _validate_conditions_block(self):
-        pass
+        man_cons = {"slain","dying","unconscious","stable","concentration"}
+        checked_names = [name for name, v in self._cond_vars.items() if v.get() and name not in man_cons]
+        sel_indices = self.targs.curselection()
+        sel_targets = [self._cond_targets_index_to_warrior[i] for i in sel_indices]
+        if not checked_names or not sel_targets:
+            self.add_cond_btn.state(["disabled"])
+            self.clear_cond_btn.state(["disabled"])
+            return
+        raw = self.var_cond_duration.get().strip()
+        if len(raw) == 0:
+            pass
+        elif raw.isdigit():
+            raw_int = int(raw)
+            if raw_int < 1:
+                self.add_cond_btn.state(["disabled"])
+                return
+            else:
+                pass
+        else:
+            if len(raw) > 0 and raw.isdigit() is False:
+                self.add_cond_btn.state(["disabled"])
+                return
+        timing = self.var_cond_tick_timing.get()
+        owner = self.var_cond_tick_owner.get()
+        if timing not in ("start", "end"):
+            self.add_cond_btn.state(["disabled"])
+            return
+        if owner not in ("target", "source", "none"):
+            self.add_cond_btn.state(["disabled"])
+            return
+        if owner == "source" and self.cond_sources.current() == 0:
+            self.add_cond_btn.state(["disabled"])
+            return
     # Logging helper.
     def _log(self):
         pass
