@@ -5,7 +5,8 @@ If you would like to use this project at your home table for a private game, ple
 -Hours Logged: 73
 
 Installation:
-You'll need to close the repository from GitHub (https://github.com/Beguiler87/AdvancedInit.git). Please note, you will need Python 3 or later to run this program. If you do not know how to install that, please review the following links (YouTube may also be helpful):
+You'll need to clone the repository from GitHub (https://github.com/Beguiler87/AdvancedInit.git). If you are unsure of how to do so, this link should be helpful: https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository.
+Please note, you will need Python 3 or later to run this program. If you do not know how to install that, please review the following links (YouTube may also be helpful):
 For Windows:
 https://www.python.org/downloads/
 https://learn.microsoft.com/en-us/windows/python/beginners
