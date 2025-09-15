@@ -1671,6 +1671,7 @@ class Window:
         checked_names = [name for name, v in self._cond_vars.items() if v.get() and name not in man_cons]
         sel_indices = self.targs.curselection()
         sel_targets = [self._cond_targets_index_to_warrior[i] for i in sel_indices]
+        # Gates 'Add Condtion' button and disables it until appropriate conditions are met.
         if not checked_names or not sel_targets:
             self.add_cond_btn.state(["disabled"])
             self.clear_cond_btn.state(["disabled"])
@@ -1700,6 +1701,15 @@ class Window:
         if owner == "source" and self.cond_sources.current() == 0:
             self.add_cond_btn.state(["disabled"])
             return
+        conc_check = self.var_cond_concentration_tie.get()
+        conc_src = self.cond_sources.current()
+        if conc_check == True and conc_src == 0:
+            self.add_cond_btn.state(["disabled"])
+            return
+        # Enables 'Add Condition' button presuming conditions are met.
+        self.add_cond_btn.state(["disabled"])
+        # Gates 'Clear Condition' button and disables it until appropriate conditions are met.
+        
     # Logging helper.
     def _log(self):
         pass
