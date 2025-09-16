@@ -503,6 +503,7 @@ class Window:
         self._setup_right_frame()
         self._update_concentration_toggle_state()
         self._setup_log_frame()
+        self._render_all()
     # Defines panels and contents.
     def _setup_left_frame(self):
         # Establishes 'borders' for frame.
@@ -720,6 +721,7 @@ class Window:
         self.targeting.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.targeting.bind("<<ComboboxSelected>>", lambda e: self._validate_hp_controls())
         self.amount_entry_point = tk.Entry(self.amnt_entry, textvariable=self.var_amount, justify="left", bg=self.colors["list_bg"])
+        self.var_amount.trace_add("write", lambda *a: self._validate_hp_controls())
         self.amount_entry_point.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.res_checkbox = tk.Checkbutton(self.res_toggle, text="Resurrection", variable=self.var_resurrection)
         self.res_checkbox.grid(row=0, column=0, sticky="w", padx=1, pady=1)
@@ -781,6 +783,7 @@ class Window:
             self._cond_vars[name] = var
             cb = tk.Checkbutton(self.condlist, text=name, variable=var, anchor="w", bg=self.colors["list_bg"])
             cb.grid(row=row, column=col, sticky="ew", padx=1, pady=1)
+            cb.configure(command=self._validate_conditions_block)
             self._cond_checks[name] = cb
             if name in ("slain", "dying"):
                 self._cond_checks[name].configure(state="disabled")
@@ -801,6 +804,7 @@ class Window:
         # Source list.
         self.cond_sources = ttk.Combobox(self.sandt_panel, state="readonly", values=["None"] + [w.name for w in self.tracker.warriors], textvariable=self.var_cond_source)
         self.cond_sources.grid(row=0, column=1, sticky="ew", padx=1, pady=1)
+        self.cond_sources.bind("<<ComboboxSelected>>", lambda e: (self._update_concentration_toggle_state(), self._validate_conditions_block()))
         self._cond_source_items = [None]
         for w in self.tracker.warriors:
             self._cond_source_items.append(w)
@@ -813,11 +817,13 @@ class Window:
         self.targets_list_frame.grid_columnconfigure(0, weight=1)
         self.targets_list_frame.grid_columnconfigure(1, weight=0)
         self.targets_list_frame.grid_rowconfigure(0, weight=1)
-        self.targs = tk.Listbox(self.targets_list_frame, selectmode="extended", bg=self.colors["list_bg"])
+        self.targs = tk.Listbox(self.targets_list_frame, selectmode="extended", bg=self.colors["list_bg"], exportselection=False)
         self.targs.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         # Targets scrollbar.
         self.targs_scroll = tk.Scrollbar(self.targets_list_frame, command=self.targs.yview)
         self.targs_scroll.grid(row=0, column=1, sticky="ns")
+        self.targs.configure(yscrollcommand=self.targs_scroll.set)
+        self.targs.bind("<<ListboxSelect>>", lambda e: self._render_all())
         # Condition details frames.
         self.cond_details_border = tk.Frame(self.conditions_panel, bg=self.colors["border"])
         self.cond_details_border.grid(row=3, column=0, sticky="nsew", padx=1, pady=1)
@@ -855,6 +861,7 @@ class Window:
         self.tie_lbl.grid(row=0, column=3, sticky="nsew", padx=1, pady=1)
         self.tie_checkbox = tk.Checkbutton(self.cond_details, variable=self.var_cond_concentration_tie, justify="center", width=12)
         self.tie_checkbox.grid(row=1, column=3, sticky="nsew", padx=1, pady=1)
+        self.var_cond_concentration_tie.trace_add("write", lambda *a: self._render_all())
         if self.var_cond_source.get() == "None":
             self.tie_checkbox.configure(state="disabled")
             self.var_cond_concentration_tie.set(False)
@@ -919,7 +926,7 @@ class Window:
         if tie and source is not None and added_ties:
             self._conc_tie_counts[source] = self._conc_tie_counts.get(source, 0) + added_ties
         self._rebuild_cond_sources_and_targets()
-        self._validate_conditions_block()
+        self._render_all()
     # Clear condition button wiring.
     def _on_conditions_clear(self):
         man_cons = {"slain","dying","unconscious","stable","concentration"}
@@ -936,7 +943,7 @@ class Window:
                     target.remove_condition(cond)
                     if cond.expires_with_source == "concentration" and cond.source is not None:
                         sources_to_check.add(cond.source)
-                        dec_by[cond.src] = dec_by.get(cond.src, 0) + 1
+                        dec_by[cond.source] = dec_by.get(cond.source, 0) + 1
                     self._log(f"Cleared {cond.name} from {target.name}.")
         for src, n in dec_by.items():
             self._conc_tie_counts[src] = max(0, self._conc_tie_counts.get(src, 0) - n)
@@ -952,7 +959,7 @@ class Window:
                     src.remove_condition(conc)
                     self._log(f"{src.name} stops concentrating (no tied effects remain)")
         self._rebuild_cond_sources_and_targets()
-        self._validate_conditions_block()
+        self._render_all()
     # Used to refresh the initiative display.
     def render_initiative(self):
         if len(self.tracker.warriors) == 0:
@@ -979,7 +986,6 @@ class Window:
             self.nxt_turn_btn.state(["!disabled"])
         else:
             self.nxt_turn_btn.state(["disabled"])
-        self.render_roster()
     # Helper method to clear initiative list between refreshes.
     def _clear_initiative_list(self):
         self.init_tree.delete(*self.init_tree.get_children())
@@ -997,7 +1003,7 @@ class Window:
             return
         self.selected_warrior = w
         self.init_tree.selection_remove(self.init_tree.selection())
-        self.render_roster()
+        self._render_all()
     # Handler for scrollbar binding in central panel.
     def _on_roster_select(self, event=None):
         if self._suppress_select:
@@ -1010,7 +1016,7 @@ class Window:
         if w is not None:
             self.selected_warrior = w
             self.roster.selection_remove(self.roster.selection())
-            self.render_right_panel()
+            self._render_all()
     # Ties tracker.next_turn() and render_initiative() together.
     def _on_next_turn(self):
         # Guards against advancing turn if only one warrior on the list.
@@ -1023,8 +1029,7 @@ class Window:
         # Syncs gui by advancing round number if appropriate, updating selected warrior, and updates the highlight.
         self.round_var.set(f"Round: {self.tracker.round_number}")
         self.selected_warrior = new_actor
-        self.render_initiative()
-        self.render_roster()
+        self._render_all()
         # Checks for team wipe and notifies if true.
         status = self.tracker.check_team_able()
         if status["allies_disabled"]: messagebox.showinfo("Combat", "All allies are defeated. The DM has earned a nap and a cookie!")
@@ -1179,6 +1184,8 @@ class Window:
             "tiebreak": tiebreak,
         }
         self._finalize_add_warrior(payload)
+        self._rebuild_cond_sources_and_targets()
+        self._validate_conditions_block()
     # Finalizes the warrior being added.
     def _finalize_add_warrior(self, payload):
         # Create the new Warrior
@@ -1205,11 +1212,9 @@ class Window:
                 self._tb_win.wait_window()
                 self.tracker.sort_warriors()
         # Refresh displays
-        self.render_initiative()
-        self.render_roster()
         self._rebuild_target_options()
-        self._validate_hp_controls()
-        self.render_right_panel()
+        self._rebuild_cond_sources_and_targets()
+        self._render_all()
         # Select and reveal the new combatant
         iid = str(id(w))
         self._suppress_select = True
@@ -1229,7 +1234,6 @@ class Window:
             self.start_combat_btn.state(["!disabled"])
         else:
             self.start_combat_btn.state(["disabled"])
-        pass
     # Handler for starting combat.
     def _on_start_combat(self):
         if len(self.tracker.warriors) < 2:
@@ -1251,11 +1255,9 @@ class Window:
             self.tracker.eligible_from_round[id(w)] = 1
         self.selected_warrior = self.tracker.warriors[0]
         self._combat_started = True
-        self.render_initiative()
-        self.render_roster()
         self._rebuild_target_options()
-        self._validate_hp_controls()
-        self.render_right_panel()
+        self._rebuild_cond_sources_and_targets()
+        self._render_all()
     # Modal for handling tied initiative.
     def _open_tie_breaker_modal(self, ties):
         self._tb_cancelled = False
@@ -1403,7 +1405,7 @@ class Window:
             return
         hp_before = w.hp_current
         result = w.take_damage(n, is_critical=False)
-        breaks = {x.lower() for x in BREAKS_CONCENTRATION}
+        breaks = {x.lower() for x in self.breaks_conc}
         if result == "slain":
             cause = "slain"
         elif result == "dying":
@@ -1417,10 +1419,8 @@ class Window:
         if cause and conc in w.conditions:
             conc_dict = self.tracker.remove_condition(w, conc.condition_id)
         hp_after = w.hp_current
-        self.render_initiative()
-        self.render_roster()
         self._rebuild_target_options()
-        self._validate_hp_controls()
+        self._render_all()
         self.status_text.set("")
         # Logging info.
         log_line = f"DMG: {w.name} takes {n} damage. Hit points reduce from {hp_before} to {hp_after}"
@@ -1454,10 +1454,8 @@ class Window:
             return
         w.heal(n, resurrection_effect=res)
         hp_after = w.hp_current
-        self.render_initiative()
-        self.render_roster()
         self._rebuild_target_options()
-        self._validate_hp_controls()
+        self._render_all()
         self.status_text.set("")
         # Logging info.
         log_line = f"HEAL: {w.name} is healed for {n}. Hit points increase from {hp_before} to {hp_after}"
@@ -1477,10 +1475,8 @@ class Window:
             self.status_text.set("Death saves only allowed at 0 hp (not slain or stable)")
             return
         result = w.fail_death_saves(is_critical=False)
-        self.render_initiative()
-        self.render_roster()
         self._rebuild_target_options()
-        self._validate_hp_controls()
+        self._render_all()
         self.status_text.set("")
         log_line = f"DS: {w.name} +1 failure."
         if result == "slain":
@@ -1498,10 +1494,8 @@ class Window:
             self.status_text.set("Death saves only allowed at 0 hp (not slain or stable)")
             return
         result = w.fail_death_saves(is_critical=True)
-        self.render_initiative()
-        self.render_roster()
         self._rebuild_target_options()
-        self._validate_hp_controls()
+        self._render_all()
         self.status_text.set("")
         log_line = f"DS: {w.name} +2 failures."
         if result == "slain":
@@ -1519,10 +1513,8 @@ class Window:
             self.status_text.set("Death saves only allowed at 0 hp (not slain or stable)")
             return
         result = w.succeed_death_saves(is_critical=False)
-        self.render_initiative()
-        self.render_roster()
         self._rebuild_target_options()
-        self._validate_hp_controls()
+        self._render_all()
         self.status_text.set("")
         log_line = f"DS: {w.name} +1 success"
         if result == "stable":
@@ -1540,10 +1532,8 @@ class Window:
             self.status_text.set("Death saves only allowed at 0 hp (not slain or stable)")
             return
         w.succeed_death_saves(is_critical=True)
-        self.render_initiative()
-        self.render_roster()
         self._rebuild_target_options()
-        self._validate_hp_controls()
+        self._render_all()
         self.status_text.set("")
         log_line = f"DS: {w.name} critical success! HP is restored to 1."
         self._log(log_line)
@@ -1667,10 +1657,30 @@ class Window:
         self._validate_conditions_block()
     # Conditions block validation.
     def _validate_conditions_block(self):
+        if not hasattr(self, "targs"):
+            try:
+                self.add_cond_btn.state(["disabled"])
+                self.clear_cond_btn.state(["disabled"])
+            finally:
+                return
         man_cons = {"slain","dying","unconscious","stable","concentration"}
         checked_names = [name for name, v in self._cond_vars.items() if v.get() and name not in man_cons]
         sel_indices = self.targs.curselection()
         sel_targets = [self._cond_targets_index_to_warrior[i] for i in sel_indices]
+        found = False
+        # Gates 'Clear Condition' button and disables it until appropriate conditions are met.
+        checked_set = set(checked_names)
+        for target in sel_targets:
+            for cond in target.conditions:
+                if cond.name in checked_set:
+                    found = True
+                    break
+            if found:
+                break
+        if found == True:
+            self.clear_cond_btn.state(["!disabled"])
+        else:
+            self.clear_cond_btn.state(["disabled"])
         # Gates 'Add Condtion' button and disables it until appropriate conditions are met.
         if not checked_names or not sel_targets:
             self.add_cond_btn.state(["disabled"])
@@ -1707,9 +1717,34 @@ class Window:
             self.add_cond_btn.state(["disabled"])
             return
         # Enables 'Add Condition' button presuming conditions are met.
-        self.add_cond_btn.state(["disabled"])
-        # Gates 'Clear Condition' button and disables it until appropriate conditions are met.
-        
+        self.add_cond_btn.state(["!disabled"])
+    # Renders conditions panel.
+    def _render_conditions_panel(self):
+        man_cons = {"slain", "dying", "unconscious", "stable", "concentration"}
+        sel_indices = self.targs.curselection()
+        sel_targets = [self._cond_targets_index_to_warrior[i] for i in sel_indices] if sel_indices else []
+        def warrior_has(name, warrior):
+            return any(getattr(c, "name", "").lower() == name for c in getattr(warrior, "conditions", []))
+        # For each non-unique condition checkbox, set it checked if ALL selected targets have it.
+        for name, var in self._cond_vars.items():
+            if name in man_cons:
+                # Leave manual/unique conditions alone (or force False if you prefer a cleaner look)
+                continue
+            if not sel_targets:
+                # No selection = show as unchecked
+                var.set(False)
+                continue
+            # Check whether every selected target has this condition
+            all_have = all(warrior_has(name, w) for w in sel_targets)
+            var.set(bool(all_have))
+    # Rendering helper.
+    def _render_all(self):
+        self.render_roster()
+        self.render_initiative()
+        self.render_right_panel()
+        self._validate_hp_controls()
+        self._render_conditions_panel()
+        self._validate_conditions_block()
     # Logging helper.
     def _log(self):
         pass

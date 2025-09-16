@@ -2,7 +2,7 @@
 A more robust initiative tracker compatible with the 5th Edition Dungeons and Dragons combat system based on an earlier project of mine. No trademark or copyright infringement is intended. This program is simply designed as a learning exercise (for myself) and to facilitate the running of the game for users.
 If you would like to use this project at your home table for a private game, please feel free. You may not use this program or its code or contents in any non-personal or commercial manner without written permission from the author.
 
--Hours Logged: 73
+-Hours Logged: 76.5
 
 Installation:
 You'll need to clone the repository from GitHub (https://github.com/Beguiler87/AdvancedInit.git). If you are unsure of how to do so, this link should be helpful: https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository.
