@@ -2,7 +2,7 @@
 A more robust initiative tracker compatible with the 5th Edition Dungeons and Dragons combat system based on an earlier project of mine. No trademark or copyright infringement is intended. This program is simply designed as a learning exercise (for myself) and to facilitate the running of the game for users.
 If you would like to use this project at your home table for a private game, please feel free. You may not use this program or its code or contents in any non-personal or commercial manner without written permission from the author.
 
--Hours Logged: 76.5
+-Hours Logged: 80
 
 Installation:
 You'll need to clone the repository from GitHub (https://github.com/Beguiler87/AdvancedInit.git). If you are unsure of how to do so, this link should be helpful: https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository.
@@ -23,3 +23,6 @@ When entering combatants into the initiative tracker, make sure each name is dis
 
 Grouped Monsters:
 If you're a DM who runs their monsters in groups (I certainly am), there are two options to consider in the program's current incarnation. The first is to keep all of your monsters in one group under a single entry with one initiative. This is certainly the easiest way to go, since you only need to type in "orc" once and enter initiative, etc. for it a single time. However, you will run into issues with the various conditions if you do so. For example, if one orc is stunned, but another is concentrating on a spell, the concentration marker would be removed by the system automatically. To avoid this, I recommend entering each of your monsters individually. Give them the same initiative and stats, but change the name for each (ie orc 1, orc 2, orc 3, etc.). This does mean set up is a little more intense, but it will certainly make combat a little smoother.
+
+Conditions:
+A limited number of conditions will be visible in the central roster panel. If more than 3-4 conditions are applied to the same target, they are likely to expand beyond the visible area. Conditions beyond this will still be applied, but this will obviously make them harder to track. Please bear this in mind.

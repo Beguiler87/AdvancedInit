@@ -317,7 +317,7 @@ class Tracker:
         # Defines current warrior in initiative.
         current_warrior = self.warriors[self.current_warrior_index]
         # Loops through current combatant's conditions (if any) and ticks any that decrement at end of turn.
-        current_warrior.tick_conditions("end", current_warrior)
+        self._tick_for_actor("end", current_warrior)
         # Increments index in list of combatants.
         self.current_warrior_index += 1
         # Resets index to 0 and advances round number if reaching the end of initiative list.
@@ -342,7 +342,7 @@ class Tracker:
         # Defines new current warrior.
         new_warrior = self.warriors[self.current_warrior_index]
         # Loops through current combatant's conditions (if any) and ticks any that decrement at start of turn.
-        new_warrior.tick_conditions("start", new_warrior)
+        self._tick_for_actor("start", new_warrior)
         self.check_team_able()
         # Returns the new current combatant in the list.
         return new_warrior
@@ -415,6 +415,29 @@ class Tracker:
         for warrior in self.warriors:
             ties.setdefault(warrior.initiative, []).append(warrior)
         return {init: group for init, group in ties.items() if len(group) > 1}
+    # Ticking helper.
+    def _tick_for_actor(self, when, actor):
+        if actor is None:
+            return
+        for w in self.warriors:
+            for c in list(getattr(w, "conditions", [])):
+                if getattr(c, "duration", None) is None:
+                    continue
+                if getattr(c, "tick_timing", None) != when:
+                    continue
+                owner = getattr(c, "tick_owner", None)
+                should_tick = False
+                if owner == "target":
+                    should_tick = (w is actor)
+                elif owner == "source":
+                    should_tick = (getattr(c, "source", None) is actor)
+                elif owner in (None, "none"):
+                    should_tick = (when == "start" and self.current_warrior_index == 0)
+                if not should_tick:
+                    continue
+                c.duration -= 1
+                if c.duration <= 0:
+                    self.remove_condition(w, c.condition_id)
 
 # Window class used for creating a functional GUI.
 class Window:
@@ -599,7 +622,7 @@ class Window:
         self.roster.column("AC", width=45, anchor="w", stretch=False)
         self.roster.column("HP", width=70, anchor="w", stretch=False)
         self.roster.column("Max HP", width=70, anchor="w", stretch=False)
-        self.roster.column("Conditions", width=20, anchor="w", stretch=True)
+        self.roster.column("Conditions", width=280, minwidth=220, anchor="w", stretch=True)
         self.roster.column("Fail", width=40, anchor="w", stretch=False)
         self.roster.column("Pass", width=40, anchor="w", stretch=False)
         # Creates the roster scrollbars.
@@ -817,13 +840,13 @@ class Window:
         self.targets_list_frame.grid_columnconfigure(0, weight=1)
         self.targets_list_frame.grid_columnconfigure(1, weight=0)
         self.targets_list_frame.grid_rowconfigure(0, weight=1)
-        self.targs = tk.Listbox(self.targets_list_frame, selectmode="extended", bg=self.colors["list_bg"], exportselection=False)
+        self.targs = tk.Listbox(self.targets_list_frame, selectmode="multiple", bg=self.colors["list_bg"], exportselection=False)
         self.targs.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         # Targets scrollbar.
         self.targs_scroll = tk.Scrollbar(self.targets_list_frame, command=self.targs.yview)
         self.targs_scroll.grid(row=0, column=1, sticky="ns")
         self.targs.configure(yscrollcommand=self.targs_scroll.set)
-        self.targs.bind("<<ListboxSelect>>", lambda e: self._render_all())
+        self.targs.bind("<<ListboxSelect>>", lambda e: self._validate_conditions_block())
         # Condition details frames.
         self.cond_details_border = tk.Frame(self.conditions_panel, bg=self.colors["border"])
         self.cond_details_border.grid(row=3, column=0, sticky="nsew", padx=1, pady=1)
@@ -861,7 +884,6 @@ class Window:
         self.tie_lbl.grid(row=0, column=3, sticky="nsew", padx=1, pady=1)
         self.tie_checkbox = tk.Checkbutton(self.cond_details, variable=self.var_cond_concentration_tie, justify="center", width=12)
         self.tie_checkbox.grid(row=1, column=3, sticky="nsew", padx=1, pady=1)
-        self.var_cond_concentration_tie.trace_add("write", lambda *a: self._render_all())
         if self.var_cond_source.get() == "None":
             self.tie_checkbox.configure(state="disabled")
             self.var_cond_concentration_tie.set(False)
@@ -870,6 +892,7 @@ class Window:
         self.add_cond_btn.grid(row=2, column=0, columnspan=2, sticky="ew", padx=1, pady=1)
         self.clear_cond_btn = ttk.Button(self.cond_details, text="Clear Condition", command=self._on_conditions_clear, state="disabled")
         self.clear_cond_btn.grid(row=2, column=2, columnspan=2, sticky="ew", padx=1, pady=1)
+        self.var_cond_concentration_tie.trace_add("write", lambda *a: self._render_all())
         # Renders the right panel and its contents.
         self.render_right_panel()
         self._rebuild_target_options()
@@ -898,6 +921,7 @@ class Window:
         if owner == "none":
             owner = None
         tie = self.var_cond_concentration_tie.get()
+        breaks = {x.lower() for x in self.breaks_conc}
         names = [name for name, v in self._cond_vars.items() if v.get() and name not in {"slain", "dying", "unconscious", "stable", "concentration"}]
         duration = None if raw == "" else int(raw)
         added_ties = 0
@@ -919,8 +943,22 @@ class Window:
                     self._log(f"Applied {cond_name} ({dur_text}, {timing}/{owner_text}) from {source.name if source else 'None'} to {target.name}.")
                 if tie and source is not None and token in ("added", "added_breaks_concentration"):
                     added_ties += 1
+                if cond_name.lower() in breaks:
+                    conc = target._find_condition_by_name("concentration")
+                    if conc is not None:
+                        result = self.tracker.remove_condition(target, conc.condition_id)
+                        self._log(f"{target.name} loses concentration due to {cond.name}.")
+                        for cid in result.get("cascade", []):
+                            for ww in self.tracker.warriors:
+                                rc = ww.get_condition_by_id(cid)
+                                if rc:
+                                    self._log(f"CASCADED: Removed {rc.name} from {ww.name} (source {target.name}).")
         for n in names:
             self._cond_vars[n].set(False)
+        if tie and source is not None and source._find_condition_by_name("concentration") is None:
+            source.apply_condition(Condition("concentration", source=source, target=source))
+        if tie and source is not None and added_ties:
+            self._conc_tie_counts[source] = self._conc_tie_counts.get(source, 0) + added_ties
         if tie and source is not None and source._find_condition_by_name("concentration") is None:
             source.apply_condition(Condition("concentration", source=source, target=source))
         if tie and source is not None and added_ties:
@@ -929,35 +967,48 @@ class Window:
         self._render_all()
     # Clear condition button wiring.
     def _on_conditions_clear(self):
-        man_cons = {"slain","dying","unconscious","stable","concentration"}
+        man_cons = {"slain","dying","unconscious","stable"}
         names = [name for name, v in self._cond_vars.items() if v.get() and name not in man_cons]
         indices = self.targs.curselection()
         targets = [ self._cond_targets_index_to_warrior[i] for i in indices]
-        sources_to_check = set()
-        dec_by = {}
+        src = None
+        if "concentration" in names:
+            idx = self.cond_sources.current()
+            src = self._cond_source_items[idx] if idx is not None and idx > 0 else None
+        if src is not None:
+            conc = src._find_condition_by_name("concentration")
+            if conc is not None:
+                result = self.tracker.remove_condition(src, conc.condition_id)
+                self._log(f"{src.name} stops concentration (manual end).")
+                for cid in result.get("cascade", []):
+                    for ww in self.tracker.warriors:
+                        cond = ww.get_condition_by_id(cid)
+                        if cond:
+                            self._log(f"CASCADED: Removed {cond.name} from {ww.name} (source {src.name})")
+            names = [n for n in names if n != "concentration"]
+            if not names:
+                self._rebuild_cond_sources_and_targets()
+                self._render_all()
+                return
         if not names or not targets:
             return
         for target in targets:
-            for cond in list(target.conditions):
+            for cond in list(target, cond.condition_id):
                 if cond.name in names:
                     target.remove_condition(cond)
                     if cond.expires_with_source == "concentration" and cond.source is not None:
                         sources_to_check.add(cond.source)
                         dec_by[cond.source] = dec_by.get(cond.source, 0) + 1
                     self._log(f"Cleared {cond.name} from {target.name}.")
-        for src, n in dec_by.items():
-            self._conc_tie_counts[src] = max(0, self._conc_tie_counts.get(src, 0) - n)
-        for src in sources_to_check:
-            still_tied = any(
-                c.expires_with_source == "concentration" and c.source is src
-                for w in self.tracker.warriors
-                for c in w.conditions
-            )
-            if not still_tied and self._conc_tie_counts.get(src, 0) == 0:
-                conc = src._find_condition_by_name("concentration")
-                if conc is not None:
-                    src.remove_condition(conc)
-                    self._log(f"{src.name} stops concentrating (no tied effects remain)")
+        # Recompute tied-effect counts from the model
+        self._recompute_conc_tie_counts()
+        # Remove concentration only from sources that have no tied effects left
+        for w in self.tracker.warriors:
+            if w._find_condition_by_name("concentration") is not None:
+                if self._conc_tie_counts.get(w, 0) == 0:
+                    conc = w._find_condition_by_name("concentration")
+                    w.remove_condition(conc)
+                    self._log(f"{w.name} stops concentrating (no tied effects remain)")
         self._rebuild_cond_sources_and_targets()
         self._render_all()
     # Used to refresh the initiative display.
@@ -1048,6 +1099,22 @@ class Window:
             if w is self.tracker.warriors[self.tracker.current_warrior_index]:
                 tags.append(self.tags["current"])
             self.roster.insert("", "end", iid=iid, values=values, tags=tags)
+        try:
+            fnt = tk.font.nametofont("TkDefaultFont")
+        except Exception:
+            fnt = None
+        max_px = 0
+        for w in self.tracker.warriors:
+            cond_text = ", ".join(c.name for c in w.conditions)
+            if fnt:
+                px = fnt.measure(cond_text) + 24
+            else:
+                px = 8 * len(cond_text) + 24
+            if px > max_px:
+                max_px = px
+        cap = 800
+        new_w = max(280, min(max_px, cap))
+        self.roster.column("Conditions", width=new_w, minwidth=220, stretch=True)
         if self.selected_warrior is not None:
             sel_iid = str(id(self.selected_warrior))
             if sel_iid in self._roster_iid_to_warrior:
@@ -1657,17 +1724,14 @@ class Window:
         self._validate_conditions_block()
     # Conditions block validation.
     def _validate_conditions_block(self):
-        if not hasattr(self, "targs"):
-            try:
-                self.add_cond_btn.state(["disabled"])
-                self.clear_cond_btn.state(["disabled"])
-            finally:
-                return
-        man_cons = {"slain","dying","unconscious","stable","concentration"}
+        if not hasattr(self, "targs") or not hasattr(self, "add_cond_btn") or not hasattr(self, "clear_cond_btn"):
+            return
+        man_cons = {"slain","dying","unconscious","stable"}
         checked_names = [name for name, v in self._cond_vars.items() if v.get() and name not in man_cons]
         sel_indices = self.targs.curselection()
         sel_targets = [self._cond_targets_index_to_warrior[i] for i in sel_indices]
         found = False
+        special_conc_clear = ("concentration" in checked_names and self.cond_sources.current() > 0)
         # Gates 'Clear Condition' button and disables it until appropriate conditions are met.
         checked_set = set(checked_names)
         for target in sel_targets:
@@ -1675,14 +1739,16 @@ class Window:
                 if cond.name in checked_set:
                     found = True
                     break
-            if found:
-                break
-        if found == True:
+        if found or special_conc_clear:
             self.clear_cond_btn.state(["!disabled"])
         else:
             self.clear_cond_btn.state(["disabled"])
         # Gates 'Add Condtion' button and disables it until appropriate conditions are met.
         if not checked_names or not sel_targets:
+            if special_conc_clear:
+                self.clear_cond_btn.state(["!disabled"])
+                self.add_cond_btn.state(["disabled"])
+                return
             self.add_cond_btn.state(["disabled"])
             self.clear_cond_btn.state(["disabled"])
             return
@@ -1724,7 +1790,8 @@ class Window:
         sel_indices = self.targs.curselection()
         sel_targets = [self._cond_targets_index_to_warrior[i] for i in sel_indices] if sel_indices else []
         def warrior_has(name, warrior):
-            return any(getattr(c, "name", "").lower() == name for c in getattr(warrior, "conditions", []))
+            n = name.lower()
+            return any(getattr(c, "name", "").lower() == n for c in getattr(warrior, "conditions", []))
         # For each non-unique condition checkbox, set it checked if ALL selected targets have it.
         for name, var in self._cond_vars.items():
             if name in man_cons:
@@ -1744,10 +1811,21 @@ class Window:
         self.render_right_panel()
         self._validate_hp_controls()
         self._render_conditions_panel()
+        self._recompute_conc_tie_counts()
         self._validate_conditions_block()
     # Logging helper.
-    def _log(self):
+    def _log(self, message):
         pass
+    # Helper to recompute concentration based condition displays.
+    def _recompute_conc_tie_counts(self):
+        self._conc_tie_counts = {}
+        for w in self.tracker.warriors:
+            for c in getattr(w, "conditions", []):
+                if getattr(c, "expires_with_source", None) == "concentration" and getattr(c, "source", None) is not None:
+                    src = c.source
+                    self._conc_tie_counts[src] = self._conc_tie_counts.get(src, 0) + 1
+
+
 # Primary function/entry point.
 #def main():
     #tracker = Tracker()
