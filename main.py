@@ -431,8 +431,8 @@ class Tracker:
                     should_tick = (w is actor)
                 elif owner == "source":
                     should_tick = (getattr(c, "source", None) is actor)
-                elif owner in (None, "none"):
-                    should_tick = (when == "start" and self.current_warrior_index == 0)
+                #elif owner in (None, "none"):
+                #    should_tick = (when == "start" and self.current_warrior_index == 0)
                 if not should_tick:
                     continue
                 c.duration -= 1
@@ -734,6 +734,14 @@ class Window:
         self.dmg_hl_btn_frame.grid_columnconfigure(0, weight=1)
         self.dmg_hl_btn_frame.grid_columnconfigure(1, weight=1)
         self.dmg_hl_btn_frame.grid_rowconfigure(0, weight=1)
+        # Max HP delta buttons
+        self.mx_btn_frame = tk.Frame(self.dmg_hl_border, bg=self.colors["button_bg"])
+        self.mx_btn_frame.grid(row=1, column=0, sticky="ew", padx=1, pady=1)
+        self.mx_btn_frame.grid_columnconfigure(0, weight=1)
+        self.mx_btn_frame.grid_columnconfigure(1, weight=1)
+        self.mx_btn_frame.grid_columnconfigure(2, weight=1)
+        self.max_inc_btn = ttk.Button(self.mx_btn_frame, text="Apply Update", command=self._on_maxhp_delta_apply)
+        self.max_inc_btn.grid(row=0, column=2, sticky="ew", padx=1, pady=1)
         # 'Damage' and 'Heal' button configurations
         self.dmg_btn = ttk.Button(self.dmg_hl_btn_frame, text="Damage", command=self._on_damage_apply)
         self.dmg_btn.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
@@ -746,6 +754,12 @@ class Window:
         self.amount_entry_point = tk.Entry(self.amnt_entry, textvariable=self.var_amount, justify="left", bg=self.colors["list_bg"])
         self.var_amount.trace_add("write", lambda *a: self._validate_hp_controls())
         self.amount_entry_point.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        # Framing for Max HP delta.
+        tk.Label(self.mx_btn_frame, text=" Update Target Max HP:", bg=self.colors["button_bg"]).grid(row=0, column=0, sticky="w", padx=1, pady=1)
+        self.var_maxhp_delta = tk.StringVar(value="")
+        self.var_maxhp_delta.trace_add("write", lambda *a: self._validate_hp_controls())
+        self.maxhp_entry = tk.Entry(self.mx_btn_frame, textvariable=self.var_maxhp_delta, bg=self.colors["list_bg"], width=10)
+        self.maxhp_entry.grid(row=0, column=1, sticky="w", padx=1, pady=1)
         self.res_checkbox = tk.Checkbutton(self.res_toggle, text="Resurrection", variable=self.var_resurrection)
         self.res_checkbox.grid(row=0, column=0, sticky="w", padx=1, pady=1)
         self.status_lbl = tk.Label(self.status_panel, textvariable=self.status_text, bg=self.colors["button_bg"], justify="left")
@@ -876,7 +890,7 @@ class Window:
         # Condition tick owner.
         self.tick_owner_lbl = tk.Label(self.cond_details, text="Tick owner:", bg=self.colors["button_bg"], font=("TkDefaultFont", 10), justify="center", width=6)
         self.tick_owner_lbl.grid(row=0, column=2, sticky="ew", padx=1, pady=1)
-        self.tick_owner = ttk.Combobox(self.cond_details, state="readonly", values=["none", "target", "source"], textvariable=self.var_cond_tick_owner)
+        self.tick_owner = ttk.Combobox(self.cond_details, state="readonly", values=["target", "source"], textvariable=self.var_cond_tick_owner)
         self.tick_owner.grid(row=1, column=2, sticky="ew", padx=1, pady=1)
         self.tick_owner.bind("<<ComboboxSelected>>", lambda e: self._validate_conditions_block())
         # Concentration.
@@ -906,7 +920,24 @@ class Window:
         self.log_frame = tk.Frame(self.log_frame_border, bg=self.colors["panel_bg"])
         self.log_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.log_frame.grid_columnconfigure(0, weight=1)
-        self.log_frame.grid_rowconfigure(0, weight=1)
+        self.log_frame.grid_rowconfigure(0, weight=0)
+        self.log_frame.grid_rowconfigure(1, weight=1)
+        self.log_header_border = tk.Frame(self.log_frame, bg=self.colors["border"])
+        self.log_header_border.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=1, pady=1)
+        self.log_header_border.grid_columnconfigure(0, weight=1)
+        self.log_header_border.grid_rowconfigure(0, weight=1)
+        self.log_header = tk.Frame(self.log_header_border, bg=self.colors["button_bg"])
+        self.log_header.grid_columnconfigure(0, weight=1)
+        self.log_header.grid_rowconfigure(0, weight=1)
+        self.log_header.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.log_header_lbl = tk.Label(self.log_header, text="Combat Actions Log", bg=self.colors["button_bg"])
+        self.log_header_lbl.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        log_scroll = ttk.Scrollbar(self.log_frame, orient="vertical")
+        self.log_text = tk.Text(self.log_frame, wrap="word", bg=self.colors["list_bg"], state="disabled", height=6)
+        self.log_text.configure(yscrollcommand=log_scroll.set)
+        log_scroll.configure(command=self.log_text.yview)
+        self.log_text.grid(row=1, column=0, sticky="nsew")
+        log_scroll.grid(row=1, column=1, sticky="ns")
     # Apply condition button wiring.
     def _on_conditions_apply(self):
         indices = self.targs.curselection()
@@ -918,8 +949,6 @@ class Window:
         raw = self.var_cond_duration.get().strip()
         timing = self.var_cond_tick_timing.get()
         owner = self.var_cond_tick_owner.get()
-        if owner == "none":
-            owner = None
         tie = self.var_cond_concentration_tie.get()
         breaks = {x.lower() for x in self.breaks_conc}
         names = [name for name, v in self._cond_vars.items() if v.get() and name not in {"slain", "dying", "unconscious", "stable", "concentration"}]
@@ -982,8 +1011,8 @@ class Window:
                 self._log(f"{src.name} stops concentration (manual end).")
                 for cid in result.get("cascade", []):
                     for ww in self.tracker.warriors:
-                        cond = ww.get_condition_by_id(cid)
-                        if cond:
+                        rc = ww.get_condition_by_id(cid)
+                        if rc:
                             self._log(f"CASCADED: Removed {cond.name} from {ww.name} (source {src.name})")
             names = [n for n in names if n != "concentration"]
             if not names:
@@ -993,13 +1022,10 @@ class Window:
         if not names or not targets:
             return
         for target in targets:
-            for cond in list(target, cond.condition_id):
-                if cond.name in names:
-                    target.remove_condition(cond)
-                    if cond.expires_with_source == "concentration" and cond.source is not None:
-                        sources_to_check.add(cond.source)
-                        dec_by[cond.source] = dec_by.get(cond.source, 0) + 1
-                    self._log(f"Cleared {cond.name} from {target.name}.")
+            for c in list(target.conditions):
+                if c.name in names:
+                    self.tracker.remove_condition(target, c.condition_id)
+                    self._log(f"Cleared {c.name} from {target.name}.")
         # Recompute tied-effect counts from the model
         self._recompute_conc_tie_counts()
         # Remove concentration only from sources that have no tied effects left
@@ -1661,6 +1687,12 @@ class Window:
         dmg_ok = (w is not None) and ok_amt
         heal_ok = (w is not None) and ok_amt
         ds_ok = bool(w and (w.hp_current == 0) and (not w.is_dead()) and (w._find_condition_by_name("stable") is None))
+        ok_mx, mx = self._parse_int(self.var_maxhp_delta.get())
+        mx_ok = (w is not None) and ok_mx
+        if mx_ok:
+            self.max_inc_btn.state(["!disabled"])
+        else:
+            self.max_inc_btn.state(["disabled"])
         if w is None:
             try:
                 self.dmg_btn.state(["disabled"])
@@ -1771,7 +1803,7 @@ class Window:
         if timing not in ("start", "end"):
             self.add_cond_btn.state(["disabled"])
             return
-        if owner not in ("target", "source", "none"):
+        if owner not in ("target", "source"):
             self.add_cond_btn.state(["disabled"])
             return
         if owner == "source" and self.cond_sources.current() == 0:
@@ -1814,8 +1846,18 @@ class Window:
         self._recompute_conc_tie_counts()
         self._validate_conditions_block()
     # Logging helper.
-    def _log(self, message):
-        pass
+    def _log(self, msg):
+        try:
+            print(msg)
+        except Exception:
+            pass
+        # GUI log panel.
+        lt = getattr(self, "log_text", None)
+        if lt is not None:
+            lt.configure(state="normal")
+            lt.insert("end", msg + "\n")
+            lt.see("end")
+            lt.configure(state="disabled")
     # Helper to recompute concentration based condition displays.
     def _recompute_conc_tie_counts(self):
         self._conc_tie_counts = {}
@@ -1824,14 +1866,54 @@ class Window:
                 if getattr(c, "expires_with_source", None) == "concentration" and getattr(c, "source", None) is not None:
                     src = c.source
                     self._conc_tie_counts[src] = self._conc_tie_counts.get(src, 0) + 1
+    # Parse helper for max hp delta.
+    def _parse_int(self, s):
+        s = (s or "").strip()
+        try:
+            n = int(s, 10)
+            return True, n
+        except Exception:
+            return False, None
+    # Handlers for apply/clear temp max hp changes.
+    def _on_maxhp_delta_apply(self):
+        w = self._get_selected_warrior()
+        ok, delta = self._parse_int(self.var_maxhp_delta.get())
+        if w is None:
+            self.status_text.set("Select a target.")
+            return
+        if not ok:
+            self.status_text.set("Enter a whole number for Max HP Δ (e.g., 5 or -5).")
+            return
+        old_max = w.hp_current_max
+        new_max = max(0, old_max + delta)
+        w.hp_current_max = new_max
+        if w.hp_current > new_max:
+            w.hp_current = new_max
+        self._render_all()
+        self.status_text.set("")
+        sign = "+" if delta >= 0 else ""
+        self._log(f"MAXΔ: {w.name} Max HP {old_max} → {new_max} ({sign}{delta})")
+    # Handler for clearing max hp delta.
+    def _on_maxhp_delta_clear(self):
+        w = self._get_selected_warrior()
+        if w is None:
+            self.status_text.set("Select a target.")
+            return
+        if w.hp_current_max < w.hp_current:
+            old_max = w.hp_current_max
+            w.hp_current_max = w.hp_current
+            self._log(f"MAXΔ: {w.name} Max HP {old_max} → {w.hp_current} (cleared)")
+        else:
+            self._log(f"MAXΔ: {w.name} Max HP unchanged (no delta to clear)")
+        self._render_all()
+        self.status_text.set("")
 
 
 # Primary function/entry point.
-#def main():
-    #tracker = Tracker()
-
-if __name__ == "__main__":
+def main():
     tracker = Tracker()
     window = Window(tracker)
     window.root.mainloop()
-    #main()
+
+if __name__ == "__main__":
+    main()
