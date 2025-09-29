@@ -20,8 +20,8 @@ https://docs.python.org/3/using/mac.html
 For Linux:
 Let's be honest, you probably already know enough to do this without me telling you how...
 
-Starting the Program:
-Once installed, navigate to the directory within your program of choice (I used VS Code for this project) and start it with "python3 main.py". This opens the combat tracker on your screen, and you are off to the races!
+Quick Start:
+Once installed, navigate to the directory within your program of choice (I used VS Code for this project) and start it with "python3 main.py". This opens the combat tracker on your screen, and you are off to the races! Click the Add Combatant button and enter the requested information. Repeat this process for all participants, and click the Start Combat button to begin.
 
 Usage:
 
