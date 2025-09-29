@@ -4,7 +4,7 @@ If you would like to use this project at your home table for a private game, ple
 
 Motivation: I have been playing various TTRPGs for most of my life, mostly Dungeons and Dragons. Given my knowledge of the game rules, I wanted to build a combat tracker to facilitate the running of the game. Since there are so many moving parts to any given combat, it felt like a good way to stretch my creative muscles and see just how far I could take the concept.
 
-Contributing: Constructive feedback is always welcome. If you have suggestions or feedback, please message me on the Boot.dev Discord. Thank you!
+##Contributing: Constructive feedback is always welcome. If you have suggestions or feedback, please message me on the Boot.dev Discord. Thank you!
 
 -Hours Logged: 82
 
